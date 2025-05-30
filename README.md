@@ -47,6 +47,29 @@ A comprehensive system cleaning utility that:
 
 **Location**: [/another_one_bites_the_dust](./another_one_bites_the_dust)
 
+### 3. Another Home Backup Tool
+
+A simple bash script for backing up essential files from your home directory:
+- Creates a compressed tar archive of your home directory
+- Focuses only on essential files and directories
+- Excludes caches, logs, and other unnecessary files
+- Names backups with your username and current date
+- Allows specifying a custom backup destination
+- If no destination is provided, saves to ~/backup/
+
+**Location**: [/another_home_backup_tool](./another_home_backup_tool)
+
+### 4. Another yt-dlp wrapper
+
+A wrapper script for the yt-dlp media downloader with additional organization features:
+- Organizes downloads into structured directories
+- Manages a media archive to track downloads
+- Supports both video and audio-only downloads
+- Offers high-quality defaults with customizable options
+- Maintains logs of downloaded media
+
+**Location**: [/another_yt-dlp_wrapper](./another_yt-dlp_wrapper)
+
 ## Usage
 
 Each tool includes its own README with detailed usage instructions, and the scripts themselves contain help information accessible via the `--help` flag.

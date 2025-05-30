@@ -1,6 +1,6 @@
 # Another Bucket of Tools
 
-> **Lingue disponibili**: [English](README.md) | [Italiano (attuale)](README.it.md)
+> **Lingue disponibili**: [English](README.md) | [Italiano (corrente)](README.it.md)
 
 Una raccolta di script shell sviluppati con l'assistenza dell'IA per ricreare utilità comunemente disponibili ma con miglioramenti personalizzati adattati alle mie specifiche esigenze.
 
@@ -46,6 +46,29 @@ Un'utilità completa per la pulizia del sistema che:
 - Supporta modalità interattiva e non interattiva
 
 **Posizione**: [/another_one_bites_the_dust](./another_one_bites_the_dust)
+
+### 3. Another Home Backup Tool
+
+Un semplice script bash per eseguire il backup dei file essenziali dalla tua directory home:
+- Crea un archivio tar compresso della tua directory home
+- Si concentra solo sui file e le directory essenziali
+- Esclude cache, log e altri file non necessari
+- Nomina i backup con il tuo nome utente e la data corrente
+- Consente di specificare una destinazione personalizzata per il backup
+- Se non viene fornita una destinazione, salva in ~/backup/
+
+**Posizione**: [/another_home_backup_tool](./another_home_backup_tool)
+
+### 4. Another yt-dlp wrapper
+
+Uno script wrapper per il downloader di media yt-dlp con funzionalità aggiuntive di organizzazione:
+- Organizza i download in directory strutturate
+- Gestisce un archivio media per tenere traccia dei download
+- Supporta sia i download video che solo audio
+- Offre impostazioni predefinite di alta qualità con opzioni personalizzabili
+- Mantiene registri dei media scaricati
+
+**Posizione**: [/another_yt-dlp_wrapper](./another_yt-dlp_wrapper)
 
 ## Utilizzo
 

@@ -123,6 +123,23 @@ This makes it easy to integrate with desktop environments or scripts that set th
 
 ## Example Use Cases
 
+### Using with Cron Jobs
+
+For automated daily downloads without user interaction, you can set up a cron job using the `-s` (silent) option:
+
+```bash
+# Example cron entry to download Bing image daily at 5 AM
+0 5 * * * /path/to/another_bing_image_of_the_day_downloader.sh -s -o /path/to/images -w /path/to/wallpapers
+```
+
+Recommended flags for cron jobs:
+- `-s` (silent): suppresses all output except critical errors, perfect for cron jobs
+- `-o` (output directory): explicitly specify where to save the images and metadata
+- `-w` (wallpaper directory): optional, if you want to maintain a separate copy for use as wallpaper
+- `-l` (locale): optional, specify a locale if you don't want to use the default
+
+This setup ensures the script runs quietly in the background and downloads a fresh image each day.
+
 ### Using with Hyprland
 
 You can easily set up Hyprland to download and use the Bing image of the day as your wallpaper by adding to your `hyprland.conf`:

@@ -123,6 +123,23 @@ Questo rende facile l'integrazione con ambienti desktop o script che impostano l
 
 ## Esempi di Casi d'Uso
 
+### Utilizzo con Cron Jobs
+
+Per download automatici giornalieri senza interazione dell'utente, puoi configurare un job cron utilizzando l'opzione `-s` (silenzioso):
+
+```bash
+# Esempio di voce cron per scaricare l'immagine Bing quotidianamente alle 5 del mattino
+0 5 * * * /percorso/a/another_bing_image_of_the_day_downloader.sh -s -o /percorso/alle/immagini -w /percorso/agli/sfondi
+```
+
+Flag consigliati per i job cron:
+- `-s` (silenzioso): sopprime tutto l'output eccetto gli errori critici, perfetto per i job cron
+- `-o` (directory di output): specifica esplicitamente dove salvare le immagini e i metadati
+- `-w` (directory degli sfondi): opzionale, se desideri mantenere una copia separata da utilizzare come sfondo
+- `-l` (località): opzionale, specifica una località se non vuoi usare quella predefinita
+
+Questa configurazione assicura che lo script funzioni silenziosamente in background e scarichi una nuova immagine ogni giorno.
+
 ### Utilizzo con Hyprland
 
 Puoi facilmente configurare Hyprland per scaricare e utilizzare l'immagine del giorno di Bing come sfondo aggiungendo al tuo `hyprland.conf`:
