@@ -18,9 +18,10 @@ Questo script offre le seguenti funzionalità:
    - Supporta il download dei sottotitoli sia manuali che generati automaticamente in diverse lingue
 
 2. **Modalità di Funzionamento Multiple**
-   - Modalità interattiva con domande guidate
+   - Modalità interattiva con domande guidate e anteprima della configurazione
    - Modalità a riga di comando per scripting e automazione
    - Rilevamento intelligente degli URL per video, canali e playlist
+   - Mostra il comando equivalente per facilitare la configurazione dell'automazione
 
 3. **Gestione Efficiente**
    - Salta i video già esistenti per evitare duplicati (non sovrascrive mai i video già scaricati)
@@ -81,16 +82,38 @@ Esegui semplicemente lo script senza argomenti per utilizzare la modalità inter
 ```
 
 Ti verrà chiesto di:
-1. Inserire un URL multimediale (video, canale o playlist)
-2. Specificare una directory di output (o utilizzare la directory corrente)
-3. Confermare le tue scelte prima che inizi il download
+1. Scegliere il tipo di input (URL singolo o file di testo con più URL)
+2. Inserire un URL multimediale (video, canale o playlist) oppure il percorso di un file di testo
+3. Specificare una directory di output (o utilizzare la directory corrente)
+4. Scegliere le preferenze per i sottotitoli (manuali e/o generati automaticamente)
+5. Selezionare quali tipi di contenuto scaricare (video, shorts, dirette)
+6. Scegliere la modalità di velocità di download (normale, lenta o veloce) per il rate limiting
+7. Rivedere il riepilogo della configurazione con il comando equivalente prima che inizi il download
+
+La modalità interattiva fornisce assistenza guidata e ti mostra il comando non-interattivo equivalente che potresti utilizzare per l'automazione o come riferimento futuro.
+
+#### Opzioni di Velocità Download
+
+Lo script offre tre modalità di velocità di download per bilanciare prestazioni e limiti di rate del servizio:
+
+- **Modalità normale** (predefinita): Velocità bilanciata con ritardi di 1-3 secondi tra le richieste
+- **Modalità lenta**: Più conservativa con ritardi di 5-10 secondi per evitare limiti di rate (raccomandato per download di grandi dimensioni)
+- **Modalità veloce**: Nessun ritardo tra le richieste (usa con cautela, può attivare i limiti del servizio)
+
+#### Riepilogo della Configurazione
+
+Prima di iniziare il download, la modalità interattiva mostra:
+- Tutte le opzioni selezionate
+- I tipi di contenuto che verranno scaricati
+- La modalità di velocità di download scelta
+- **Il comando equivalente** che potresti utilizzare per ripetere questa operazione in modo non-interattivo
 
 ### Modalità a Riga di Comando
 
 Per un utilizzo automatizzato o per lo scripting:
 
 ```bash
-./another_yt-dlp_wrapper.sh -n -u "https://youtube.com/watch?v=XXXX" -o ~/Video
+./another_yt-dlp_wrapper.sh -n -u "https://example.com/watch?v=XXXX" -o ~/Video
 ```
 
 ### Opzioni Disponibili
@@ -116,6 +139,8 @@ Opzioni:
   --only-videos             Scarica solo i video normali
   --only-shorts             Scarica solo gli shorts
   --only-live               Scarica solo le dirette e registrazioni live
+  --slow                    Abilita la modalità download lenta (ritardo 5-10 sec) per evitare limiti di rate
+  --fast                    Disabilita i ritardi di limitazione (può attivare i limiti del servizio)
 ```
 
 ### Programmazione con Cron
@@ -124,29 +149,29 @@ Per download automatizzati programmati utilizzando cron, combina le opzioni `-n`
 
 ```bash
 # Esempio di voce cron per scaricare un canale ogni giorno alle 3 del mattino
-0 3 * * * /percorso/a/another_yt-dlp_wrapper.sh -n -s -u "https://youtube.com/@NomeCanale" -o /percorso/ai/video/
+0 3 * * * /percorso/a/another_yt-dlp_wrapper.sh -n -s -u "https://example.com/@NomeCanale" -o /percorso/ai/video/
 ```
 
 I flag usati per i job cron:
-- `-n` (non-interattivo): Necessario per l'esecuzione senza input dell'utente
-- `-s` (silenzioso): Sopprime tutto l'output tranne gli errori, ideale per cron
-- `-o` (directory di output): Specifica dove salvare i video scaricati
+- `-n` (non-interattivo): necessario per l'esecuzione senza input dell'utente
+- `-s` (silenzioso): sopprime tutto l'output tranne gli errori, ideale per cron
+- `-o` (directory di output): specifica dove salvare i video scaricati
 
 ## Esempi
 
 Scarica un singolo video:
 ```bash
-./another_yt-dlp_wrapper.sh -n -u "https://youtube.com/watch?v=XXXX"
+./another_yt-dlp_wrapper.sh -n -u "https://example.com/watch?v=XXXX"
 ```
 
 Scarica tutti i video da un canale:
 ```bash
-./another_yt-dlp_wrapper.sh -n -u "https://youtube.com/c/NomeCanale" -o ~/Video
+./another_yt-dlp_wrapper.sh -n -u "https://example.com/c/NomeCanale" -o ~/Video
 ```
 
 Scarica una playlist:
 ```bash
-./another_yt-dlp_wrapper.sh -n -u "https://youtube.com/playlist?list=XXXX"
+./another_yt-dlp_wrapper.sh -n -u "https://example.com/playlist?list=XXXX"
 ```
 
 ## Caso d'Uso: Archivio Locale di Media con Aggiornamenti Automatici
@@ -181,45 +206,108 @@ Lo script organizza tutti i contenuti scaricati per tipo:
 Puoi personalizzare quali tipi di contenuto scaricare con le seguenti opzioni:
 ```bash
 # Scarica solo i video normali
-./another_yt-dlp_wrapper.sh -n -u "https://youtube.com/c/NomeCanale" --only-videos
+./another_yt-dlp_wrapper.sh -n -u "https://example.com/c/NomeCanale" --only-videos
 
 # Scarica tutto tranne gli shorts
-./another_yt-dlp_wrapper.sh -n -u "https://youtube.com/c/NomeCanale" --no-shorts
+./another_yt-dlp_wrapper.sh -n -u "https://example.com/c/NomeCanale" --no-shorts
 ```
+
+### Protezione da Limitazione del Rate
+
+Lo script include una protezione completa da limitazione del rate per evitare potenziali limiti del servizio e garantire download stabili. Sono disponibili tre modalità:
+
+- **Modalità normale** (predefinita): protezione bilanciata con ritardi di 1-3 secondi tra le richieste
+  - `--sleep-interval 1` (pausa di 1 secondo tra le richieste)
+  - `--max-sleep-interval 3` (massimo 3 secondi se yt-dlp aumenta i ritardi)
+  - `--retry-sleep 5` (5 secondi tra i tentativi di retry)
+  - `--retries 3` e `--fragment-retries 3`
+
+- **Modalità lenta** (`--slow`): approccio conservativo con ritardi di 5-10 secondi, ideale per grandi download batch
+  - `--sleep-interval 5` (pausa di 5 secondi tra le richieste)
+  - `--max-sleep-interval 10` (massimo 10 secondi)
+  - `--retry-sleep 10` (10 secondi tra i tentativi di retry)
+  - `--retries 5` e `--fragment-retries 5`
+
+- **Modalità veloce** (`--fast`): ritardi minimi per download più veloci, usare con cautela per operazioni grandi
+  - `--sleep-interval 0` (nessuna pausa tra le richieste)
+  - Nessun ritardo di retry (può attivare i limiti del servizio)
+
+Esempi:
+```bash
+# Usa la modalità lenta per download di canali grandi per essere più rispettosi verso il servizio
+./another_yt-dlp_wrapper.sh -n -u "https://example.com/c/CanaleGrande" --slow
+
+# Usa la modalità veloce per singoli video quando serve velocità
+./another_yt-dlp_wrapper.sh -n -u "https://example.com/watch?v=XXXX" --fast
+```
+
+**Raccomandazione**: usa la modalità normale predefinita per la maggior parte delle operazioni, passa a `--slow` per grandi download batch o se riscontri limitazioni del servizio.
+
+## Esempi Aggiuntivi
+
+Questa sezione fornisce esempi completi che coprono vari casi d'uso, dal download di base a scenari avanzati come l'archiviazione completa di canali e la sincronizzazione.
+
+### Download Completo di un Canale
+
+Scarica un intero canale con tutti i tipi di contenuto e sottotitoli:
+```bash
+# Download completo del canale con sottotitoli e logging
+./another_yt-dlp_wrapper.sh -n -u "https://example.com/c/NomeCanale" \
+  -o ~/ArchivioMedia \
+  --subs --auto-subs \
+  --sub-langs en,it \
+  --slow \
+  --log ~/logs/download_canale.log
+```
+
+### Sincronizzazione Canale
+
+Sincronizza una directory di canale esistente (scarica solo nuovi contenuti):
+```bash
+# Sincronizzazione giornaliera - scarica solo nuovi video dall'ultima esecuzione
+./another_yt-dlp_wrapper.sh -n -u "https://example.com/c/NomeCanale" \
+  -o ~/ArchivioMedia \
+  --subs \
+  --slow \
+  --silent \
+  --log ~/logs/sync_$(date +%Y%m%d).log
+```
+
+### Esempi di Utilizzo Base
 
 Scarica video con sottotitoli creati manualmente:
 ```bash
-./another_yt-dlp_wrapper.sh -n -u "https://youtube.com/watch?v=XXXX" --subs
+./another_yt-dlp_wrapper.sh -n -u "https://example.com/watch?v=XXXX" --subs
 ```
 
 Scarica video con sottotitoli generati automaticamente:
 ```bash
-./another_yt-dlp_wrapper.sh -n -u "https://youtube.com/watch?v=XXXX" --auto-subs
+./another_yt-dlp_wrapper.sh -n -u "https://example.com/watch?v=XXXX" --auto-subs
 ```
 
 Scarica video con entrambi i tipi di sottotitoli:
 ```bash
-./another_yt-dlp_wrapper.sh -n -u "https://youtube.com/watch?v=XXXX" --subs --auto-subs
+./another_yt-dlp_wrapper.sh -n -u "https://example.com/watch?v=XXXX" --subs --auto-subs
 ```
 
 Scarica video con lingue specifiche per i sottotitoli:
 ```bash
-./another_yt-dlp_wrapper.sh -n -u "https://youtube.com/watch?v=XXXX" --subs --sub-langs en,it
+./another_yt-dlp_wrapper.sh -n -u "https://example.com/watch?v=XXXX" --subs --sub-langs en,it
 ```
 
 Scarica solo video normali (no shorts o dirette):
 ```bash
-./another_yt-dlp_wrapper.sh -n -u "https://youtube.com/c/NomeCanale" --only-videos
+./another_yt-dlp_wrapper.sh -n -u "https://example.com/c/NomeCanale" --only-videos
 ```
 
 Scarica solo shorts:
 ```bash
-./another_yt-dlp_wrapper.sh -n -u "https://youtube.com/c/NomeCanale" --only-shorts
+./another_yt-dlp_wrapper.sh -n -u "https://example.com/c/NomeCanale" --only-shorts
 ```
 
 Scarica video e dirette, ma salta gli shorts:
 ```bash
-./another_yt-dlp_wrapper.sh -n -u "https://youtube.com/c/NomeCanale" --no-shorts
+./another_yt-dlp_wrapper.sh -n -u "https://example.com/c/NomeCanale" --no-shorts
 ```
 
 Scarica video da una lista di URL in un file:
@@ -229,25 +317,25 @@ Scarica video da una lista di URL in un file:
 
 Abilita il logging completo su file:
 ```bash
-./another_yt-dlp_wrapper.sh -n -u "https://youtube.com/watch?v=XXXX" --log log-download.txt
+./another_yt-dlp_wrapper.sh -n -u "https://example.com/watch?v=XXXX" --log log-download.txt
 ```
 
 ### Utilizzo di un File di Input
 
-Puoi creare un file di testo con URL di YouTube (uno per riga) per scaricare più video, canali o playlist in una singola operazione. Per esempio:
+Puoi creare un file di testo con URL multimediali (uno per riga) per scaricare più video, canali o playlist in una singola operazione. Per esempio:
 
 ```
 # I miei canali preferiti (le righe che iniziano con # vengono ignorate)
-https://youtube.com/c/Canale1
-https://youtube.com/c/Canale2
+https://example.com/c/Canale1
+https://example.com/c/Canale2
 
 # Playlist
-https://youtube.com/playlist?list=XXXX
-https://youtube.com/playlist?list=YYYY
+https://example.com/playlist?list=XXXX
+https://example.com/playlist?list=YYYY
 
 # Video individuali
-https://youtube.com/watch?v=VIDEO1
-https://youtube.com/watch?v=VIDEO2
+https://example.com/watch?v=VIDEO1
+https://example.com/watch?v=VIDEO2
 ```
 
 Poi scarica tutti con:

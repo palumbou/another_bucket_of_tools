@@ -29,6 +29,13 @@ DOWNLOAD_VIDEOS=true
 DOWNLOAD_SHORTS=true
 DOWNLOAD_LIVE=true
 
+# Rate limiting configuration
+RATE_LIMIT_MODE="normal"  # normal, slow, fast
+SLOW_MIN_DELAY=5
+SLOW_MAX_DELAY=10
+NORMAL_MIN_DELAY=1
+NORMAL_MAX_DELAY=3
+
 # Function to display log messages with color and timestamp
 log_message() {
     local level="$1"
@@ -109,6 +116,8 @@ show_help() {
     echo "  --only-videos             Download only regular videos"
     echo "  --only-shorts             Download only shorts"
     echo "  --only-live               Download only live streams/recordings"
+    echo "  --slow                    Enable slower download mode (5-10 sec delay) to avoid rate limits"
+    echo "  --fast                    Disable rate limiting delays (may trigger YouTube limits)"
     echo ""
     echo "Examples:"
     echo "  ./another_yt-dlp_wrapper.sh                                  # Run in interactive mode"
@@ -156,6 +165,9 @@ process_url() {
     # Detect URL type
     if [[ $url == *"youtube.com/watch"* ]] || [[ $url == *"youtu.be/"* ]]; then
         DOWNLOAD_TYPE="video"
+    elif [[ $url == *"youtube.com/shorts/"* ]]; then
+        DOWNLOAD_TYPE="video"  # Treat shorts as videos for download logic
+        log_message "INFO" "Shorts URL detected"
     elif [[ $url == *"youtube.com/playlist"* ]]; then
         DOWNLOAD_TYPE="playlist"
     elif [[ $url == *"youtube.com/c/"* ]] || [[ $url == *"youtube.com/channel/"* ]] || [[ $url == *"youtube.com/user/"* ]] || [[ $url == *"youtube.com/@"* ]]; then
@@ -200,6 +212,89 @@ get_channel_name() {
     echo "$channel_name"
 }
 
+# Function to get rate limiting arguments based on current mode
+get_rate_limit_args() {
+    local rate_args=()
+    
+    case "$RATE_LIMIT_MODE" in
+        "fast")
+            # Fast mode: minimal rate limiting (may trigger YouTube limits)
+            rate_args+=(--sleep-interval 0)
+            ;;
+        "slow")
+            # Slow mode: aggressive rate limiting to avoid limits
+            rate_args+=(--sleep-interval "$SLOW_MIN_DELAY")
+            rate_args+=(--max-sleep-interval "$SLOW_MAX_DELAY")
+            rate_args+=(--retries 5)
+            rate_args+=(--fragment-retries 5)
+            rate_args+=(--retry-sleep 10)
+            ;;
+        "normal"|*)
+            # Normal mode: balanced rate limiting
+            rate_args+=(--sleep-interval "$NORMAL_MIN_DELAY")
+            rate_args+=(--max-sleep-interval "$NORMAL_MAX_DELAY")
+            rate_args+=(--retries 3)
+            rate_args+=(--fragment-retries 3)
+            rate_args+=(--retry-sleep 5)
+            ;;
+    esac
+    
+    echo "${rate_args[@]}"
+}
+
+# Function to generate equivalent command line
+generate_command_line() {
+    local cmd="./another_yt-dlp_wrapper.sh"
+    
+    # Add non-interactive flag
+    cmd="$cmd --non-interactive"
+    
+    # Add URL
+    if [ -n "$MEDIA_URL" ]; then
+        cmd="$cmd --url \"$MEDIA_URL\""
+    fi
+    
+    # Add output directory if different from current
+    if [ "$OUTPUT_DIR" != "$(pwd)" ]; then
+        cmd="$cmd --output-dir \"$OUTPUT_DIR\""
+    fi
+    
+    # Add subtitle options
+    if $DOWNLOAD_SUBTITLES; then
+        cmd="$cmd --subs"
+    fi
+    if $DOWNLOAD_AUTO_SUBTITLES; then
+        cmd="$cmd --auto-subs"
+    fi
+    if [ "$SUBTITLE_LANGUAGES" != "all" ] && ($DOWNLOAD_SUBTITLES || $DOWNLOAD_AUTO_SUBTITLES); then
+        cmd="$cmd --sub-langs \"$SUBTITLE_LANGUAGES\""
+    fi
+    
+    # Add content type filters
+    if ! $DOWNLOAD_VIDEOS; then
+        cmd="$cmd --no-videos"
+    fi
+    if ! $DOWNLOAD_SHORTS; then
+        cmd="$cmd --no-shorts"
+    fi
+    if ! $DOWNLOAD_LIVE; then
+        cmd="$cmd --no-live"
+    fi
+    
+    # Add rate limiting mode
+    case "$RATE_LIMIT_MODE" in
+        "slow")
+            cmd="$cmd --slow"
+            ;;
+        "fast")
+            cmd="$cmd --fast"
+            ;;
+        # "normal" is default, no flag needed
+    esac
+    
+    echo "$cmd"
+}
+
 # Function to download videos
 download_videos() {
     local url="$1"
@@ -212,6 +307,11 @@ download_videos() {
     yt_dlp_args+=(--merge-output-format "mp4")
     yt_dlp_args+=(--continue)
     yt_dlp_args+=(--no-overwrites)
+    
+    # Rate limiting protection to avoid YouTube blocks
+    yt_dlp_args+=($(get_rate_limit_args))
+    
+    log_message "INFO" "Rate limiting protection enabled (${RATE_LIMIT_MODE} mode)"
     
     # Set up for different content types (videos, shorts, live)
     local content_types=()
@@ -291,15 +391,19 @@ download_videos() {
                 case "$content_type" in
                     "videos")
                         type_args+=(--extractor-args "youtube:tab=videos")
-                        type_args+=(--match-filter "!is_live & !live & !is_shorts")
+                        # Filter for regular videos: not live and not shorts (URL-based)
+                        type_args+=(--match-filter "!is_live & original_url!~='/shorts/'")
                         ;;
                     "shorts")
                         type_args+=(--extractor-args "youtube:tab=shorts")
-                        type_args+=(--match-filter "is_shorts")
+                        # Filter for shorts: URL contains /shorts/ and not live
+                        type_args+=(--match-filter "!is_live & original_url~='/shorts/'")
                         ;;
                     "lives")
                         type_args+=(--extractor-args "youtube:tab=videos")
-                        type_args+=(--match-filter "is_live | live")
+                        # Filter for live streams/recordings (both current and past)
+                        type_args+=(--match-filter "is_live")
+                        type_args+=(--match-filter "was_live")
                         ;;
                 esac
                 
@@ -311,9 +415,6 @@ download_videos() {
                         yt-dlp "${type_args[@]}" "$url" 2>&1
                         echo -e "---------- END YT-DLP OUTPUT ----------\n"
                     } >> "$LOG_FILE" 2>&1
-                    
-                    # Still show something to the user even when logging
-                    yt-dlp "${type_args[@]}" "$url"
                 else
                     # Normal execution without special logging
                     yt-dlp "${type_args[@]}" "$url"
@@ -348,15 +449,19 @@ download_videos() {
                 case "$content_type" in
                     "videos")
                         type_args+=(--extractor-args "youtube:tab=videos")
-                        type_args+=(--match-filter "!is_live & !live & !is_shorts")
+                        # Filter for regular videos: not live and not shorts (URL-based)
+                        type_args+=(--match-filter "!is_live & original_url!~='/shorts/'")
                         ;;
                     "shorts")
                         type_args+=(--extractor-args "youtube:tab=shorts")
-                        type_args+=(--match-filter "is_shorts")
+                        # Filter for shorts: URL contains /shorts/ and not live
+                        type_args+=(--match-filter "!is_live & original_url~='/shorts/'")
                         ;;
                     "lives")
                         type_args+=(--extractor-args "youtube:tab=videos")
-                        type_args+=(--match-filter "is_live | live")
+                        # Filter for live streams/recordings (both current and past)
+                        type_args+=(--match-filter "is_live")
+                        type_args+=(--match-filter "was_live")
                         ;;
                 esac
                 
@@ -368,9 +473,6 @@ download_videos() {
                         yt-dlp "${type_args[@]}" "$url" 2>&1
                         echo -e "---------- END YT-DLP OUTPUT ----------\n"
                     } >> "$LOG_FILE" 2>&1
-                    
-                    # Still show something to the user even when logging
-                    yt-dlp "${type_args[@]}" "$url"
                 else
                     # Normal execution without special logging
                     yt-dlp "${type_args[@]}" "$url"
@@ -480,17 +582,52 @@ run_interactive_mode() {
     # Display banner
     show_banner
     
-    # Ask for media URL
-    read -p "Enter media URL (video, channel, or playlist): " MEDIA_URL
-    if [ -z "$MEDIA_URL" ]; then
-        log_message "ERROR" "No URL provided."
-        exit 1
+    # Ask for input type (single URL or file with URLs)
+    echo ""
+    echo "Input options:"
+    echo "  1) Single URL (video, channel, or playlist) [default]"
+    echo "  2) Text file with list of URLs (one per line)"
+    read -p "Choose input type (1/2): " input_choice
+    
+    # Default to URL (option 1) if no input provided
+    if [ -z "$input_choice" ]; then
+        input_choice="1"
     fi
     
-    # Process URL to determine type
-    if ! process_url "$MEDIA_URL"; then
-        exit 1
-    fi
+    case "$input_choice" in
+        "2"|"file"|"f")
+            # Ask for input file
+            read -p "Enter path to text file with URLs: " INPUT_FILE
+            if [ -z "$INPUT_FILE" ]; then
+                log_message "ERROR" "No file path provided."
+                exit 1
+            fi
+            
+            # Expand tilde to home directory if used
+            INPUT_FILE="${INPUT_FILE/#\~/$HOME}"
+            
+            # Check if file exists
+            if [ ! -f "$INPUT_FILE" ]; then
+                log_message "ERROR" "Input file not found: $INPUT_FILE"
+                exit 1
+            fi
+            
+            log_message "INFO" "Will process URLs from file: $INPUT_FILE"
+            ;;
+        *|"1"|"url"|"u")
+            # Ask for single media URL
+            read -p "Enter media URL (video, channel, or playlist): " MEDIA_URL
+            if [ -z "$MEDIA_URL" ]; then
+                log_message "ERROR" "No URL provided."
+                exit 1
+            fi
+            
+            # Process URL to determine type
+            if ! process_url "$MEDIA_URL"; then
+                exit 1
+            fi
+            ;;
+    esac
     
     # Ask for output directory
     read -p "Enter output directory (or press Enter for current directory): " user_output_dir
@@ -555,11 +692,38 @@ run_interactive_mode() {
         echo "Live streams/recordings will be downloaded."
     fi
     
+    # Ask about download speed/rate limiting
+    echo ""
+    echo "Download speed options:"
+    echo "  1) Normal mode (default) - Balanced speed with 1-3 sec delays"
+    echo "  2) Slow mode - Slower with 5-10 sec delays to avoid rate limits"
+    echo "  3) Fast mode - No delays (may trigger YouTube rate limits)"
+    read -p "Choose download mode (1/2/3): " speed_choice
+    case "$speed_choice" in
+        "2"|"slow"|"s")
+            RATE_LIMIT_MODE="slow"
+            echo "Slow mode selected (5-10 sec delays)."
+            ;;
+        "3"|"fast"|"f")
+            RATE_LIMIT_MODE="fast"
+            echo "Fast mode selected (no delays - may trigger limits)."
+            ;;
+        *|"1"|"normal"|"n")
+            RATE_LIMIT_MODE="normal"
+            echo "Normal mode selected (1-3 sec delays)."
+            ;;
+    esac
+    
     # Confirm with user
     echo ""
     log_message "INFO" "Ready to download:"
-    echo "  Type: $DOWNLOAD_TYPE"
-    echo "  URL: $MEDIA_URL"
+    if [ -n "$INPUT_FILE" ]; then
+        echo "  Type: Multiple URLs from file"
+        echo "  Input File: $INPUT_FILE"
+    else
+        echo "  Type: $DOWNLOAD_TYPE"
+        echo "  URL: $MEDIA_URL"
+    fi
     echo "  Output Directory: $OUTPUT_DIR"
     if $DOWNLOAD_SUBTITLES; then
         echo "  Manual Subtitles: Yes (languages: $SUBTITLE_LANGUAGES)"
@@ -583,6 +747,26 @@ run_interactive_mode() {
     else
         echo "    - Live streams/recordings: No"
     fi
+    echo "  Download mode: $RATE_LIMIT_MODE"
+    echo ""
+    if [ -n "$INPUT_FILE" ]; then
+        echo "Equivalent command line:"
+        echo "./another_yt-dlp_wrapper.sh --non-interactive --file \"$INPUT_FILE\" --output-dir \"$OUTPUT_DIR\"$(
+            if $DOWNLOAD_SUBTITLES; then echo -n " --subs"; fi
+            if $DOWNLOAD_AUTO_SUBTITLES; then echo -n " --auto-subs"; fi
+            if [ "$SUBTITLE_LANGUAGES" != "all" ] && ($DOWNLOAD_SUBTITLES || $DOWNLOAD_AUTO_SUBTITLES); then echo -n " --sub-langs \"$SUBTITLE_LANGUAGES\""; fi
+            if ! $DOWNLOAD_VIDEOS; then echo -n " --no-videos"; fi
+            if ! $DOWNLOAD_SHORTS; then echo -n " --no-shorts"; fi
+            if ! $DOWNLOAD_LIVE; then echo -n " --no-live"; fi
+            case "$RATE_LIMIT_MODE" in
+                "slow") echo -n " --slow" ;;
+                "fast") echo -n " --fast" ;;
+            esac
+        )"
+    else
+        echo "Equivalent command line:"
+        echo "$(generate_command_line)"
+    fi
     echo ""
     read -p "Continue? (Y/n): " confirm
     if [[ "$confirm" =~ ^[Nn] ]]; then
@@ -591,7 +775,11 @@ run_interactive_mode() {
     fi
     
     # Start download
-    download_videos "$MEDIA_URL" "$OUTPUT_DIR"
+    if [ -n "$INPUT_FILE" ]; then
+        process_input_file "$INPUT_FILE"
+    else
+        download_videos "$MEDIA_URL" "$OUTPUT_DIR"
+    fi
 }
 
 # Parse command line arguments
@@ -711,6 +899,16 @@ while [[ $# -gt 0 ]]; do
             DOWNLOAD_VIDEOS=false
             DOWNLOAD_SHORTS=false
             DOWNLOAD_LIVE=true
+            shift
+            ;;
+        --slow)
+            RATE_LIMIT_MODE="slow"
+            log_message "INFO" "Rate limiting set to slow mode (${SLOW_MIN_DELAY}-${SLOW_MAX_DELAY}s delays)"
+            shift
+            ;;
+        --fast)
+            RATE_LIMIT_MODE="fast"
+            log_message "INFO" "Rate limiting disabled (fast mode - may trigger YouTube limits)"
             shift
             ;;
         -*)
