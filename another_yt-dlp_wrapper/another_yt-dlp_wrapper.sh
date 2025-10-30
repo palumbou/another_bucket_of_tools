@@ -396,12 +396,26 @@ get_channel_name() {
     elif [[ $url == *"youtube.com/@"* ]]; then
         channel_name=$(echo "$url" | sed -n 's|.*youtube\.com/@\([^/?]*\).*|\1|p')
     else
-        # Only if we can't extract from URL, try yt-dlp (once)
-        channel_name=$(yt-dlp --quiet --print channel_id "$url" 2>/dev/null)
+        # For video URLs, extract channel name using yt-dlp
+        # Try to get the channel name (uploader), fallback to channel handle, then channel_id
+        channel_name=$(yt-dlp --quiet --print "%(channel)s" "$url" 2>/dev/null)
+        
+        # If channel name is empty or "NA", try channel handle
+        if [ -z "$channel_name" ] || [ "$channel_name" == "NA" ]; then
+            channel_name=$(yt-dlp --quiet --print "%(uploader)s" "$url" 2>/dev/null)
+        fi
+        
+        # If still empty, try to get @handle
+        if [ -z "$channel_name" ] || [ "$channel_name" == "NA" ]; then
+            channel_name=$(yt-dlp --quiet --print "%(channel_id)s" "$url" 2>/dev/null)
+            if [ -n "$channel_name" ]; then
+                channel_name="channel_${channel_name}"
+            fi
+        fi
     fi
     
     # If we still don't have a channel name, use a timestamp
-    if [ -z "$channel_name" ]; then
+    if [ -z "$channel_name" ] || [ "$channel_name" == "NA" ]; then
         channel_name="media_download_$(date +%Y%m%d_%H%M%S)"
     fi
     
@@ -793,54 +807,40 @@ download_videos() {
             # Create channel information file
             create_channel_info_file "$url" "$channel_dir"
             
-            # Download each content type in separate directories
-            for content_type in "${content_types[@]}"; do
-                # Create subdirectory for content type
-                local type_dir="$channel_dir/$content_type"
-                mkdir -p "$type_dir"
-                
-                log_message "INFO" "Downloading $content_type to: $type_dir"
-                
-                # Set up specific yt-dlp args for this content type
-                local type_args=("${yt_dlp_args[@]}")
-                type_args+=(--output "$type_dir/%(title)s.%(ext)s")
-                
-                # Content-type specific settings
-                case "$content_type" in
-                    "videos")
-                        type_args+=(--extractor-args "youtube:tab=videos")
-                        # Filter for regular videos: not live and not shorts (URL-based)
-                        type_args+=(--match-filter "!is_live & original_url!~='/shorts/'")
-                        ;;
-                    "shorts")
-                        type_args+=(--extractor-args "youtube:tab=shorts")
-                        # Filter for shorts: URL contains /shorts/ and not live
-                        type_args+=(--match-filter "!is_live & original_url~='/shorts/'")
-                        ;;
-                    "lives")
-                        type_args+=(--extractor-args "youtube:tab=videos")
-                        # Filter for live streams/recordings (both current and past)
-                        type_args+=(--match-filter "is_live")
-                        type_args+=(--match-filter "was_live")
-                        ;;
-                esac
-                
-                # Execute yt-dlp and capture output for logging
-                if $LOG_ENABLED && [ -n "$LOG_FILE" ]; then
-                    log_message "INFO" "Starting $content_type download with yt-dlp, check log file for details"
-                    {
-                        echo -e "\n---------- YT-DLP OUTPUT (SINGLE $content_type) ----------" 
-                        yt-dlp "${type_args[@]}" "$url" 2>&1
-                        echo -e "---------- END YT-DLP OUTPUT ----------\n"
-                    } >> "$LOG_FILE" 2>&1
-                else
-                    # Normal execution without special logging
-                    yt-dlp "${type_args[@]}" "$url"
-                fi
-                
-                # Create description files with URLs from info.json
-                create_description_files "$type_dir"
-            done
+            # For single video URLs, detect the type and download only to the appropriate folder
+            # Determine video type from URL
+            local video_type="videos"
+            if [[ $url == *"/shorts/"* ]]; then
+                video_type="shorts"
+            elif [[ $url == *"/live/"* ]]; then
+                video_type="lives"
+            fi
+            
+            # Create subdirectory for the video type
+            local type_dir="$channel_dir/$video_type"
+            mkdir -p "$type_dir"
+            
+            log_message "INFO" "Downloading video to: $type_dir"
+            
+            # Set up yt-dlp args for single video (no filters needed)
+            local video_args=("${yt_dlp_args[@]}")
+            video_args+=(--output "$type_dir/%(title)s.%(ext)s")
+            
+            # Execute yt-dlp and capture output for logging
+            if $LOG_ENABLED && [ -n "$LOG_FILE" ]; then
+                log_message "INFO" "Starting video download with yt-dlp, check log file for details"
+                {
+                    echo -e "\n---------- YT-DLP OUTPUT (SINGLE VIDEO) ----------" 
+                    yt-dlp "${video_args[@]}" "$url" 2>&1
+                    echo -e "---------- END YT-DLP OUTPUT ----------\n"
+                } >> "$LOG_FILE" 2>&1
+            else
+                # Normal execution without special logging
+                yt-dlp "${video_args[@]}" "$url"
+            fi
+            
+            # Create description files with URLs from info.json
+            create_description_files "$type_dir"
             
             # Update channel info file with download timestamp
             update_channel_info_timestamp "$channel_dir"
