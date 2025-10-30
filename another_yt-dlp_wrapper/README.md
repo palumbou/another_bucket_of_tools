@@ -16,6 +16,9 @@ This script offers the following capabilities:
    - Preserves original video titles as filenames
    - Organizes content by type in separate folders (videos, shorts, live streams)
    - Supports downloading both manual and auto-generated subtitles in multiple languages
+   - Automatically downloads thumbnails for all videos
+   - Automatically creates description files with video URLs and full descriptions
+   - Saves complete metadata in JSON format for each video
 
 2. **Multiple Operation Modes**
    - Interactive mode with guided prompts and configuration preview
@@ -30,11 +33,43 @@ This script offers the following capabilities:
    - Batch processing with input file support
    - Comprehensive logging system for debugging and tracking operations
 
+4. **Channel Information Files**
+   - Automatically creates `channel_info.txt` files in each channel directory
+   - Records channel metadata (name, ID, description, follower count)
+   - Logs download configuration and history with timestamps
+   - Tracks all download sessions for audit and reference purposes
+
+5. **Authentication Support**
+   - Extract cookies automatically from your browser (Chrome, Firefox, Edge, Safari, etc.)
+   - Use custom cookie files for authentication
+   - Access private videos, members-only content, and age-restricted videos
+   - Built-in guide for cookie setup and usage
+
 ## Requirements
+
+### Required Dependencies
 
 - `bash` - The shell environment for running the script
 - `yt-dlp` - The core video downloading utility
-- `curl`, `grep`, `sed`, `mkdir` - Standard Linux utilities
+- `date` - For timestamp generation
+- `echo` - For output display  
+- `head` - For limiting output lines
+- `sed` - For URL and text processing
+- `tr` - For character transformation
+- `cut` - For string manipulation
+- `mkdir` - For directory creation
+- `grep` - For pattern searching in files
+- `tail` - For extracting last lines from files
+- `xargs` - For trimming whitespace
+- `dirname` - For extracting directory paths
+- `find` - For locating files in directory trees
+
+All of these utilities are typically pre-installed on most Linux distributions. The only external dependency you may need to install manually is `yt-dlp`.
+
+### Optional Dependencies
+
+- `jq` - JSON processor for better parsing of video metadata (highly recommended)
+  - If not installed, the script will use basic `grep` and `sed` for JSON parsing
 
 ## Installation
 
@@ -141,6 +176,85 @@ Options:
   --only-live               Download only live streams/recordings
   --slow                    Enable slower download mode (5-10 sec delay) to avoid rate limits
   --fast                    Disable rate limiting delays (may trigger service limits)
+
+Authentication options:
+  --cookies-from-browser BROWSER
+                            Extract cookies from browser (chrome, firefox, edge, safari, etc.)
+  --cookies-file FILE       Use cookies from a Netscape format cookie file
+  --cookie-guide            Show detailed guide for cookie authentication
+
+Note: Thumbnails and descriptions (with URLs) are automatically downloaded for all videos.
+```
+
+### Downloaded Files Structure
+
+For each video downloaded, the script creates the following files:
+- `video_title.mp4` - The video file in MP4 format
+- `video_title.jpg` (or `.webp`) - The video thumbnail image
+- `video_title.description.txt` - A text file containing the video URL and full description
+- `video_title.info.json` - Complete metadata in JSON format (channel, uploader, duration, views, etc.)
+- `video_title.srt` - Subtitle files (if `--subs` or `--auto-subs` is enabled)
+
+Example of `video_title.description.txt` content:
+```
+Video URL: https://www.youtube.com/watch?v=XXXXX
+
+Description:
+----------------------------------------
+This is the full video description as it appears on YouTube.
+It can contain multiple lines, links, timestamps, and other information.
+```
+
+### Authentication
+
+The script supports authentication through cookies, which allows you to:
+- Download private or unlisted videos
+- Access members-only content
+- Bypass age restrictions
+- Download videos from channels you're subscribed to
+
+#### Method 1: Extract Cookies from Browser (Recommended)
+
+The easiest method is to automatically extract cookies from your browser:
+
+```bash
+# Extract cookies from Chrome
+./another_yt-dlp_wrapper.sh -n -u "https://youtube.com/watch?v=XXXXX" --cookies-from-browser chrome
+
+# Extract cookies from Firefox
+./another_yt-dlp_wrapper.sh -n -u "https://youtube.com/watch?v=XXXXX" --cookies-from-browser firefox
+```
+
+Supported browsers: `chrome`, `chromium`, `firefox`, `edge`, `safari`, `opera`, `brave`, `vivaldi`
+
+**Requirements**: You must be logged into YouTube in the specified browser.
+
+#### Method 2: Use a Cookie File
+
+Alternatively, you can export cookies to a file and use them:
+
+1. Install a browser extension to export cookies:
+   - **Chrome/Edge**: "Get cookies.txt LOCALLY" or "cookies.txt"
+   - **Firefox**: "cookies.txt"
+
+2. Log into YouTube in your browser
+
+3. Navigate to youtube.com and export cookies using the extension
+
+4. Save the file (e.g., `youtube_cookies.txt`)
+
+5. Use the cookies file:
+   ```bash
+   ./another_yt-dlp_wrapper.sh -n -u "URL" --cookies-file ~/youtube_cookies.txt
+   ```
+
+**Security Note**: Keep your cookies file secure as it contains authentication data!
+
+#### Getting Help
+
+For a complete step-by-step guide on cookie authentication, run:
+```bash
+./another_yt-dlp_wrapper.sh --cookie-guide
 ```
 
 ### Scheduling with Cron
@@ -202,6 +316,12 @@ The script organizes all downloaded content by type:
 - Regular videos go into `/channel_name/videos/`
 - Shorts go into `/channel_name/shorts/`
 - Live streams and recordings go into `/channel_name/lives/`
+- Channel information is stored in `/channel_name/channel_info.txt`
+
+Each video is accompanied by:
+- Its thumbnail image (`.jpg` or `.webp`)
+- A description file (`.description.txt`) containing the video URL and full description
+- A metadata file (`.info.json`) with complete video information
 
 You can customize which content types to download with the following options:
 ```bash
@@ -211,6 +331,47 @@ You can customize which content types to download with the following options:
 # Download everything except shorts
 ./another_yt-dlp_wrapper.sh -n -u "https://example.com/c/ChannelName" --no-shorts
 ```
+
+### Channel Information Files
+
+The script automatically creates a `channel_info.txt` file in each channel directory containing:
+
+- **Channel Metadata**: Name, ID, URL, description, and follower count
+- **Download Configuration**: Which content types were downloaded, subtitle settings, rate limiting mode, and the exact command used
+- **Download History**: Timestamps of all download sessions (format: YYYY-MM-DD HH:MM:SS)
+
+Example `channel_info.txt` content:
+```
+=== CHANNEL INFORMATION ===
+Download Date: 2024-01-15 14:30:22
+Original URL: https://example.com/@ChannelName
+
+Channel Name: Example Channel
+Channel ID: UC1234567890abcdef
+Channel URL: https://example.com/@ChannelName
+Description: This is an example channel description...
+
+=== DOWNLOAD CONFIGURATION ===
+Output Directory: /home/user/videos/Example_Channel
+Download Videos: true
+Download Shorts: true
+Download Live: true
+Download Subtitles: Yes
+Subtitle Languages: all
+Rate Limiting Mode: normal
+Command Used: ./another_yt-dlp_wrapper.sh -n -u "https://example.com/@ChannelName" -o ~/Videos --subs
+
+=== DOWNLOAD HISTORY ===
+Previous Downloads:
+Last Download: 2024-01-15 14:30:22
+Last Download: 2024-01-16 09:15:33
+```
+
+This information is invaluable for:
+- **Audit Trail**: Track when downloads occurred and what was configured
+- **Troubleshooting**: Debug issues with specific download configurations
+- **Archive Management**: Understand the scope and history of your media collection
+- **Automation**: Reference exact settings used for successful downloads
 
 ### Rate Limiting Protection
 

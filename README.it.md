@@ -61,12 +61,18 @@ Un semplice script bash per eseguire il backup dei file essenziali dalla tua dir
 
 ### 4. Another yt-dlp wrapper
 
-Uno script wrapper per il downloader di media yt-dlp con funzionalità aggiuntive di organizzazione:
-- Organizza i download in directory strutturate
-- Gestisce un archivio media per tenere traccia dei download
-- Supporta sia i download video che solo audio
-- Offre impostazioni predefinite di alta qualità con opzioni personalizzabili
-- Mantiene registri dei media scaricati
+Uno script wrapper completo per yt-dlp che gestisce i download di contenuti multimediali da YouTube e altri siti con funzionalità avanzate di organizzazione e automazione:
+- Scarica singoli video, interi canali o playlist
+- Organizza i contenuti per tipo (video, shorts, dirette) in cartelle separate
+- Scarica automaticamente miniature, descrizioni e metadati per tutti i video
+- Supporta il download di sottotitoli (manuali e auto-generati) in più lingue
+- Supporto autenticazione tramite cookie del browser o file di cookie per contenuti privati/riservati ai membri
+- Crea file dettagliati con informazioni del canale e cronologia dei download
+- Protezione rate limiting con modalità di velocità configurabili
+- Modalità interattiva con configurazione guidata o modalità a riga di comando per l'automazione
+- Supporto elaborazione batch con file di lista URL
+- Sistema di logging completo
+- Download riprendibili e rilevamento duplicati
 
 **Posizione**: [/another_yt-dlp_wrapper](./another_yt-dlp_wrapper)
 

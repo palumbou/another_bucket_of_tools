@@ -29,6 +29,11 @@ DOWNLOAD_VIDEOS=true
 DOWNLOAD_SHORTS=true
 DOWNLOAD_LIVE=true
 
+# Authentication configuration
+USE_COOKIES=false
+COOKIES_FROM_BROWSER=""
+COOKIES_FILE=""
+
 # Rate limiting configuration
 RATE_LIMIT_MODE="normal"  # normal, slow, fast
 SLOW_MIN_DELAY=5
@@ -98,6 +103,7 @@ show_help() {
     echo ""
     echo "Options:"
     echo "  -h, --help                Show this help message and exit"
+    echo "  --cookie-guide            Show detailed guide for cookie authentication"
     echo "  -o, --output-dir DIR      Set output directory (default: current directory)"
     echo "  -u, --url URL             Media URL (video, channel, or playlist)"
     echo "  -f, --file FILE           Input file with URLs (one per line)"
@@ -119,6 +125,13 @@ show_help() {
     echo "  --slow                    Enable slower download mode (5-10 sec delay) to avoid rate limits"
     echo "  --fast                    Disable rate limiting delays (may trigger YouTube limits)"
     echo ""
+    echo "Authentication options:"
+    echo "  --cookies-from-browser BROWSER"
+    echo "                            Extract cookies from browser (chrome, firefox, edge, safari, etc.)"
+    echo "  --cookies-file FILE       Use cookies from a Netscape format cookie file"
+    echo ""
+    echo "Note: Thumbnails and descriptions (with URLs) are automatically downloaded for all videos."
+    echo ""
     echo "Examples:"
     echo "  ./another_yt-dlp_wrapper.sh                                  # Run in interactive mode"
     echo "  ./another_yt-dlp_wrapper.sh -o ~/Downloads -u https://youtube.com/watch?v=XXXX  # Download a specific video"
@@ -126,14 +139,69 @@ show_help() {
     echo "  ./another_yt-dlp_wrapper.sh -n -f channels.txt --subs        # Download all channels with manual subtitles"
     echo "  ./another_yt-dlp_wrapper.sh -n -u URL --subs --auto-subs     # Download with both manual and auto subtitles"
     echo "  ./another_yt-dlp_wrapper.sh -n -u URL --subs --sub-langs en,it  # Download only English and Italian subtitles"
+    echo "  ./another_yt-dlp_wrapper.sh -n -u URL --cookies-from-browser chrome  # Use cookies from Chrome browser"
+    echo "  ./another_yt-dlp_wrapper.sh -n -u URL --cookies-file ~/cookies.txt   # Use cookies from file"
+    echo ""
+}
+
+# Function to display cookie setup guide
+show_cookie_guide() {
+    echo ""
+    echo "=========================================="
+    echo "   COOKIE AUTHENTICATION GUIDE"
+    echo "=========================================="
+    echo ""
+    echo "Cookies allow you to download private/members-only videos and bypass age restrictions."
+    echo ""
+    echo "METHOD 1: Extract cookies from your browser (recommended)"
+    echo "-----------------------------------------------------------"
+    echo "Use the --cookies-from-browser option to automatically extract cookies."
+    echo ""
+    echo "Supported browsers:"
+    echo "  - chrome, chromium"
+    echo "  - firefox"
+    echo "  - edge"
+    echo "  - safari"
+    echo "  - opera"
+    echo "  - brave"
+    echo "  - vivaldi"
+    echo ""
+    echo "Example:"
+    echo "  ./another_yt-dlp_wrapper.sh -n -u URL --cookies-from-browser chrome"
+    echo ""
+    echo "Note: You must be logged into YouTube in the specified browser."
+    echo ""
+    echo "METHOD 2: Use a cookies file"
+    echo "-----------------------------------------------------------"
+    echo "1. Install a browser extension to export cookies:"
+    echo "   - Chrome/Edge: 'Get cookies.txt LOCALLY' or 'cookies.txt'"
+    echo "   - Firefox: 'cookies.txt'"
+    echo ""
+    echo "2. Log into YouTube in your browser"
+    echo ""
+    echo "3. Navigate to youtube.com"
+    echo ""
+    echo "4. Click the extension icon and export cookies"
+    echo "   - Save the file as 'youtube_cookies.txt' (or any name you prefer)"
+    echo "   - The file must be in Netscape cookie format"
+    echo ""
+    echo "5. Use the cookies file with this script:"
+    echo "   ./another_yt-dlp_wrapper.sh -n -u URL --cookies-file ~/youtube_cookies.txt"
+    echo ""
+    echo "BROWSER EXTENSION LINKS:"
+    echo "-----------------------------------------------------------"
+    echo "Chrome/Edge: https://chrome.google.com/webstore (search 'cookies.txt')"
+    echo "Firefox: https://addons.mozilla.org (search 'cookies.txt')"
+    echo ""
+    echo "Note: Keep your cookies file secure as it contains authentication data!"
+    echo "=========================================="
     echo ""
 }
 
 # Function to check required software dependencies
 check_dependencies() {
     local missing_deps=()
-    local optional_deps=()
-    local required_deps=("curl" "grep" "sed" "mkdir" "yt-dlp")
+    local required_deps=("yt-dlp" "date" "echo" "head" "sed" "tr" "cut" "mkdir" "grep" "tail" "xargs" "dirname" "find")
     
     log_message "INFO" "Checking required dependencies..."
     
@@ -155,7 +223,138 @@ check_dependencies() {
         exit 1
     fi
     
-    log_message "SUCCESS" "All dependencies are met."
+    # Check optional dependencies
+    if ! command -v jq &> /dev/null; then
+        log_message "WARN" "Optional dependency 'jq' is not installed. Description extraction will use basic parsing."
+        log_message "INFO" "For better JSON parsing, consider installing jq: https://jqlang.github.io/jq/"
+    fi
+    
+    log_message "SUCCESS" "All required dependencies are met."
+}
+
+# Function to validate input file content
+validate_input_file() {
+    local input_file="$1"
+    local total_lines=0
+    local empty_lines=0
+    local comment_lines=0
+    local youtube_urls=0
+    local non_youtube_urls=0
+    local invalid_lines=0
+    local non_youtube_examples=()
+    
+    log_message "INFO" "Validating file content: $input_file"
+    
+    # Read file line by line and analyze content
+    while IFS= read -r line || [ -n "$line" ]; do
+        total_lines=$((total_lines + 1))
+        
+        # Skip empty lines
+        if [ -z "$line" ]; then
+            empty_lines=$((empty_lines + 1))
+            continue
+        fi
+        
+        # Skip comment lines (starting with #)
+        if [[ "$line" =~ ^[[:space:]]*# ]]; then
+            comment_lines=$((comment_lines + 1))
+            continue
+        fi
+        
+        # Trim whitespace
+        line=$(echo "$line" | xargs)
+        
+        # Skip if empty after trimming
+        if [ -z "$line" ]; then
+            empty_lines=$((empty_lines + 1))
+            continue
+        fi
+        
+        # Check if line looks like a URL
+        if [[ "$line" =~ ^https?:// ]]; then
+            # Check if it's a YouTube URL
+            if [[ "$line" == *"youtube.com"* ]] || [[ "$line" == *"youtu.be"* ]]; then
+                youtube_urls=$((youtube_urls + 1))
+            else
+                non_youtube_urls=$((non_youtube_urls + 1))
+                # Store first few examples of non-YouTube URLs
+                if [ ${#non_youtube_examples[@]} -lt 3 ]; then
+                    non_youtube_examples+=("$line")
+                fi
+            fi
+        else
+            # Line doesn't look like a URL
+            invalid_lines=$((invalid_lines + 1))
+            # Store first few examples of invalid lines
+            if [ ${#non_youtube_examples[@]} -lt 3 ]; then
+                non_youtube_examples+=("$line")
+            fi
+        fi
+    done < "$input_file"
+    
+    # Calculate meaningful content lines
+    local content_lines=$((youtube_urls + non_youtube_urls + invalid_lines))
+    
+    # Display validation results
+    log_message "INFO" "File content analysis:"
+    echo "  - Total lines: $total_lines"
+    echo "  - Empty lines: $empty_lines"
+    echo "  - Comment lines: $comment_lines"
+    echo "  - YouTube URLs: $youtube_urls"
+    
+    if [ $non_youtube_urls -gt 0 ]; then
+        echo "  - Non-YouTube URLs: $non_youtube_urls"
+    fi
+    
+    if [ $invalid_lines -gt 0 ]; then
+        echo "  - Invalid/non-URL lines: $invalid_lines"
+    fi
+    
+    # Show warnings for non-YouTube content
+    if [ $non_youtube_urls -gt 0 ] || [ $invalid_lines -gt 0 ]; then
+        echo ""
+        log_message "WARN" "File contains non-YouTube content:"
+        
+        if [ $non_youtube_urls -gt 0 ]; then
+            log_message "WARN" "Found $non_youtube_urls non-YouTube URLs. This script is optimized for YouTube content."
+        fi
+        
+        if [ $invalid_lines -gt 0 ]; then
+            log_message "WARN" "Found $invalid_lines lines that don't appear to be valid URLs."
+        fi
+        
+        # Show examples of problematic content
+        if [ ${#non_youtube_examples[@]} -gt 0 ]; then
+            echo "  Examples of non-YouTube content:"
+            for example in "${non_youtube_examples[@]}"; do
+                echo "    - $example"
+            done
+        fi
+        
+        echo ""
+        log_message "INFO" "Note: Non-YouTube URLs may not work with this tool."
+        echo ""
+        read -p "Continue anyway? (y/N): " continue_choice
+        if [[ ! "$continue_choice" =~ ^[Yy] ]]; then
+            log_message "INFO" "File processing cancelled."
+            exit 0
+        fi
+    fi
+    
+    # Check if file has any processable content
+    if [ $youtube_urls -eq 0 ] && [ $non_youtube_urls -eq 0 ]; then
+        log_message "ERROR" "No valid URLs found in the file."
+        log_message "INFO" "The file should contain URLs (one per line). Comments starting with # are allowed."
+        exit 1
+    fi
+    
+    if [ $youtube_urls -gt 0 ]; then
+        log_message "SUCCESS" "File validation completed. Found $youtube_urls YouTube URLs to process."
+    else
+        log_message "WARN" "No YouTube URLs found. Proceeding with $non_youtube_urls non-YouTube URLs."
+    fi
+    
+    return 0
 }
 
 # Function to normalize media URL and determine type (video, channel, playlist)
@@ -249,9 +448,11 @@ generate_command_line() {
     # Add non-interactive flag
     cmd="$cmd --non-interactive"
     
-    # Add URL
+    # Add URL or file
     if [ -n "$MEDIA_URL" ]; then
         cmd="$cmd --url \"$MEDIA_URL\""
+    elif [ -n "$INPUT_FILE" ]; then
+        cmd="$cmd --file \"$INPUT_FILE\""
     fi
     
     # Add output directory if different from current
@@ -268,6 +469,13 @@ generate_command_line() {
     fi
     if [ "$SUBTITLE_LANGUAGES" != "all" ] && ($DOWNLOAD_SUBTITLES || $DOWNLOAD_AUTO_SUBTITLES); then
         cmd="$cmd --sub-langs \"$SUBTITLE_LANGUAGES\""
+    fi
+    
+    # Add authentication options
+    if [ -n "$COOKIES_FROM_BROWSER" ]; then
+        cmd="$cmd --cookies-from-browser \"$COOKIES_FROM_BROWSER\""
+    elif [ -n "$COOKIES_FILE" ]; then
+        cmd="$cmd --cookies-file \"$COOKIES_FILE\""
     fi
     
     # Add content type filters
@@ -295,6 +503,193 @@ generate_command_line() {
     echo "$cmd"
 }
 
+# Function to create channel information file
+create_channel_info_file() {
+    local url="$1"
+    local channel_dir="$2"
+    local info_file="$channel_dir/channel_info.txt"
+    local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+    
+    log_message "INFO" "Creating channel information file: $info_file"
+    
+    # Create the channel info file with basic information
+    {
+        echo "=== CHANNEL INFORMATION ==="
+        echo "Download Date: $timestamp"
+        echo "Original URL: $url"
+        echo ""
+        
+        # Try to extract detailed channel information using yt-dlp
+        log_message "DEBUG" "Extracting channel metadata..."
+        
+        # Get channel information in a single call to avoid multiple requests
+        local channel_info
+        channel_info=$(yt-dlp --quiet --print "%(channel)s|%(channel_id)s|%(channel_url)s|%(uploader)s|%(uploader_id)s|%(uploader_url)s|%(channel_follower_count)s|%(description)s" "$url" 2>/dev/null | head -1)
+        
+        if [ -n "$channel_info" ]; then
+            # Split the pipe-separated values
+            IFS='|' read -r channel_name channel_id channel_url uploader uploader_id uploader_url follower_count description <<< "$channel_info"
+            
+            # Display channel information
+            if [ -n "$channel_name" ] && [ "$channel_name" != "NA" ]; then
+                echo "Channel Name: $channel_name"
+            fi
+            
+            if [ -n "$channel_id" ] && [ "$channel_id" != "NA" ]; then
+                echo "Channel ID: $channel_id"
+            fi
+            
+            if [ -n "$channel_url" ] && [ "$channel_url" != "NA" ]; then
+                echo "Channel URL: $channel_url"
+            fi
+            
+            if [ -n "$uploader" ] && [ "$uploader" != "NA" ] && [ "$uploader" != "$channel_name" ]; then
+                echo "Uploader: $uploader"
+            fi
+            
+            if [ -n "$uploader_id" ] && [ "$uploader_id" != "NA" ] && [ "$uploader_id" != "$channel_id" ]; then
+                echo "Uploader ID: $uploader_id"
+            fi
+            
+            if [ -n "$uploader_url" ] && [ "$uploader_url" != "NA" ] && [ "$uploader_url" != "$channel_url" ]; then
+                echo "Uploader URL: $uploader_url"
+            fi
+            
+            if [ -n "$follower_count" ] && [ "$follower_count" != "NA" ] && [ "$follower_count" != "0" ]; then
+                echo "Followers: $follower_count"
+            fi
+            
+            echo ""
+            if [ -n "$description" ] && [ "$description" != "NA" ]; then
+                echo "Description:"
+                echo "$description" | head -10  # Limit description to first 10 lines
+                echo ""
+            fi
+        else
+            # Fallback: extract basic info from URL
+            echo "Channel URL: $url"
+            
+            # Try to extract channel name from URL patterns
+            if [[ $url == *"youtube.com/@"* ]]; then
+                local extracted_name=$(echo "$url" | sed -n 's|.*youtube\.com/@\([^/?]*\).*|\1|p')
+                if [ -n "$extracted_name" ]; then
+                    echo "Channel Handle: @$extracted_name"
+                fi
+            elif [[ $url == *"youtube.com/c/"* ]]; then
+                local extracted_name=$(echo "$url" | sed -n 's|.*youtube\.com/c/\([^/?]*\).*|\1|p')
+                if [ -n "$extracted_name" ]; then
+                    echo "Channel Name: $extracted_name"
+                fi
+            elif [[ $url == *"youtube.com/user/"* ]]; then
+                local extracted_name=$(echo "$url" | sed -n 's|.*youtube\.com/user/\([^/?]*\).*|\1|p')
+                if [ -n "$extracted_name" ]; then
+                    echo "Username: $extracted_name"
+                fi
+            fi
+            
+            echo ""
+            echo "Note: Detailed channel information could not be retrieved."
+        fi
+        
+        echo "=== DOWNLOAD CONFIGURATION ==="
+        echo "Output Directory: $channel_dir"
+        echo "Download Videos: $DOWNLOAD_VIDEOS"
+        echo "Download Shorts: $DOWNLOAD_SHORTS"
+        echo "Download Live: $DOWNLOAD_LIVE"
+        if $DOWNLOAD_SUBTITLES || $DOWNLOAD_AUTO_SUBTITLES; then
+            echo "Download Subtitles: Yes"
+            echo "Subtitle Languages: $SUBTITLE_LANGUAGES"
+            if $DOWNLOAD_SUBTITLES; then
+                echo "Manual Subtitles: Yes"
+            fi
+            if $DOWNLOAD_AUTO_SUBTITLES; then
+                echo "Auto-generated Subtitles: Yes"
+            fi
+        else
+            echo "Download Subtitles: No"
+        fi
+        echo "Rate Limiting Mode: $RATE_LIMIT_MODE"
+        echo "Command Used: $(generate_command_line)"
+        echo ""
+        
+        echo "=== DOWNLOAD HISTORY ==="
+        if [ -f "$info_file" ] && grep -q "Last Download:" "$info_file" 2>/dev/null; then
+            echo "Previous Downloads:"
+            grep "Last Download:" "$info_file" 2>/dev/null | tail -5
+        fi
+        echo "Last Download: $timestamp"
+        
+    } > "$info_file"
+    
+    log_message "SUCCESS" "Channel information file created successfully"
+}
+
+# Function to update channel info file with download timestamp
+update_channel_info_timestamp() {
+    local channel_dir="$1"
+    local info_file="$channel_dir/channel_info.txt"
+    local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+    
+    if [ -f "$info_file" ]; then
+        # Add new timestamp to the file
+        echo "Last Download: $timestamp" >> "$info_file"
+        log_message "DEBUG" "Updated channel info file with new timestamp"
+    fi
+}
+
+# Function to create description files from info.json files
+create_description_files() {
+    local content_dir="$1"
+    
+    log_message "DEBUG" "Creating description files with URLs in: $content_dir"
+    
+    # Find all info.json files in the directory
+    find "$content_dir" -name "*.info.json" -type f 2>/dev/null | while read -r info_file; do
+        # Get the base filename without extension
+        local base_name="${info_file%.info.json}"
+        local desc_file="${base_name}.description.txt"
+        
+        # Check if jq is available for better JSON parsing
+        if command -v jq &> /dev/null; then
+            # Extract URL and description using jq
+            local video_url=$(jq -r '.webpage_url // .url // "URL not available"' "$info_file" 2>/dev/null)
+            local description=$(jq -r '.description // "No description available"' "$info_file" 2>/dev/null)
+            
+            # Create description file with URL
+            {
+                echo "Video URL: $video_url"
+                echo ""
+                echo "Description:"
+                echo "----------------------------------------"
+                echo "$description"
+            } > "$desc_file"
+        else
+            # Fallback: use grep and sed for basic extraction (less reliable)
+            local video_url=$(grep -o '"webpage_url"[[:space:]]*:[[:space:]]*"[^"]*"' "$info_file" 2>/dev/null | sed 's/.*"webpage_url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' | head -1)
+            local description=$(grep -o '"description"[[:space:]]*:[[:space:]]*"[^"]*"' "$info_file" 2>/dev/null | sed 's/.*"description"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' | head -1)
+            
+            # If extraction failed, provide defaults
+            if [ -z "$video_url" ]; then
+                video_url="URL not available"
+            fi
+            if [ -z "$description" ]; then
+                description="No description available"
+            fi
+            
+            # Create description file with URL
+            {
+                echo "Video URL: $video_url"
+                echo ""
+                echo "Description:"
+                echo "----------------------------------------"
+                echo "$description"
+            } > "$desc_file"
+        fi
+        
+        log_message "DEBUG" "Created description file: $desc_file"
+    done
+}
+
 # Function to download videos
 download_videos() {
     local url="$1"
@@ -307,6 +702,26 @@ download_videos() {
     yt_dlp_args+=(--merge-output-format "mp4")
     yt_dlp_args+=(--continue)
     yt_dlp_args+=(--no-overwrites)
+    
+    # Download thumbnail for all content types
+    yt_dlp_args+=(--write-thumbnail)
+    
+    # Write info.json to extract URL and description later
+    yt_dlp_args+=(--write-info-json)
+    
+    # Add authentication options if configured
+    if [ -n "$COOKIES_FROM_BROWSER" ]; then
+        yt_dlp_args+=(--cookies-from-browser "$COOKIES_FROM_BROWSER")
+        log_message "INFO" "Using cookies from browser: $COOKIES_FROM_BROWSER"
+    elif [ -n "$COOKIES_FILE" ]; then
+        if [ -f "$COOKIES_FILE" ]; then
+            yt_dlp_args+=(--cookies "$COOKIES_FILE")
+            log_message "INFO" "Using cookies from file: $COOKIES_FILE"
+        else
+            log_message "ERROR" "Cookies file not found: $COOKIES_FILE"
+            return 1
+        fi
+    fi
     
     # Rate limiting protection to avoid YouTube blocks
     yt_dlp_args+=($(get_rate_limit_args))
@@ -375,6 +790,9 @@ download_videos() {
             # Create channel directory if it doesn't exist
             mkdir -p "$channel_dir"
             
+            # Create channel information file
+            create_channel_info_file "$url" "$channel_dir"
+            
             # Download each content type in separate directories
             for content_type in "${content_types[@]}"; do
                 # Create subdirectory for content type
@@ -419,7 +837,13 @@ download_videos() {
                     # Normal execution without special logging
                     yt-dlp "${type_args[@]}" "$url"
                 fi
+                
+                # Create description files with URLs from info.json
+                create_description_files "$type_dir"
             done
+            
+            # Update channel info file with download timestamp
+            update_channel_info_timestamp "$channel_dir"
             ;;
             
         "playlist"|"channel")
@@ -432,6 +856,9 @@ download_videos() {
             
             # Create channel directory if it doesn't exist
             mkdir -p "$channel_dir"
+            
+            # Create channel information file
+            create_channel_info_file "$url" "$channel_dir"
             
             # Download each content type in separate directories
             for content_type in "${content_types[@]}"; do
@@ -477,7 +904,13 @@ download_videos() {
                     # Normal execution without special logging
                     yt-dlp "${type_args[@]}" "$url"
                 fi
+                
+                # Create description files with URLs from info.json
+                create_description_files "$type_dir"
             done
+            
+            # Update channel info file with download timestamp
+            update_channel_info_timestamp "$channel_dir"
             ;;
             
         *)
@@ -502,6 +935,9 @@ process_input_file() {
         log_message "ERROR" "Input file not found: $input_file"
         return 1
     fi
+    
+    # Validate file content
+    validate_input_file "$input_file"
     
     log_message "INFO" "Processing URLs from file: $input_file"
     
@@ -587,12 +1023,27 @@ run_interactive_mode() {
     echo "Input options:"
     echo "  1) Single URL (video, channel, or playlist) [default]"
     echo "  2) Text file with list of URLs (one per line)"
-    read -p "Choose input type (1/2): " input_choice
     
-    # Default to URL (option 1) if no input provided
-    if [ -z "$input_choice" ]; then
-        input_choice="1"
-    fi
+    # Loop until valid input is provided
+    while true; do
+        read -p "Choose input type (1/2): " input_choice
+        
+        # Default to URL (option 1) if no input provided
+        if [ -z "$input_choice" ]; then
+            input_choice="1"
+            break
+        fi
+        
+        # Validate input
+        case "$input_choice" in
+            "1"|"2")
+                break
+                ;;
+            *)
+                log_message "ERROR" "Invalid input '$input_choice'. Please enter 1 or 2, or press Enter for default."
+                ;;
+        esac
+    done
     
     case "$input_choice" in
         "2"|"file"|"f")
@@ -611,6 +1062,9 @@ run_interactive_mode() {
                 log_message "ERROR" "Input file not found: $INPUT_FILE"
                 exit 1
             fi
+            
+            # Validate file content
+            validate_input_file "$INPUT_FILE"
             
             log_message "INFO" "Will process URLs from file: $INPUT_FILE"
             ;;
@@ -665,6 +1119,60 @@ run_interactive_mode() {
         echo "Will download subtitles in languages: $SUBTITLE_LANGUAGES"
     fi
     
+    # Ask about authentication
+    echo ""
+    echo "Authentication options:"
+    echo "  (Use cookies to access private videos, members-only content, or bypass age restrictions)"
+    read -p "Use authentication? (y/N): " use_auth
+    if [[ "$use_auth" =~ ^[Yy] ]]; then
+        echo ""
+        echo "Authentication methods:"
+        echo "  1) Extract cookies from browser (recommended)"
+        echo "  2) Use cookies from file"
+        echo "  3) Show cookie setup guide"
+        
+        while true; do
+            read -p "Choose method (1/2/3): " auth_method
+            
+            case "$auth_method" in
+                "1")
+                    echo ""
+                    echo "Available browsers: chrome, firefox, edge, safari, opera, brave, vivaldi"
+                    read -p "Enter browser name: " browser_name
+                    if [ -n "$browser_name" ]; then
+                        COOKIES_FROM_BROWSER="$browser_name"
+                        echo "Will use cookies from $browser_name browser."
+                    fi
+                    break
+                    ;;
+                "2")
+                    read -p "Enter path to cookies file: " cookies_path
+                    if [ -n "$cookies_path" ]; then
+                        # Expand tilde to home directory if used
+                        COOKIES_FILE="${cookies_path/#\~/$HOME}"
+                        if [ -f "$COOKIES_FILE" ]; then
+                            echo "Will use cookies from file: $COOKIES_FILE"
+                        else
+                            log_message "WARN" "Cookies file not found: $COOKIES_FILE"
+                            read -p "Continue anyway? (y/N): " continue_cookies
+                            if [[ ! "$continue_cookies" =~ ^[Yy] ]]; then
+                                COOKIES_FILE=""
+                            fi
+                        fi
+                    fi
+                    break
+                    ;;
+                "3")
+                    show_cookie_guide
+                    read -p "Press Enter to continue..."
+                    ;;
+                *)
+                    echo "Invalid choice. Please enter 1, 2, or 3."
+                    ;;
+            esac
+        done
+    fi
+    
     # Ask about content types
     echo ""
     echo "Content type options:"
@@ -698,7 +1206,28 @@ run_interactive_mode() {
     echo "  1) Normal mode (default) - Balanced speed with 1-3 sec delays"
     echo "  2) Slow mode - Slower with 5-10 sec delays to avoid rate limits"
     echo "  3) Fast mode - No delays (may trigger YouTube rate limits)"
-    read -p "Choose download mode (1/2/3): " speed_choice
+    
+    # Loop until valid input is provided
+    while true; do
+        read -p "Choose download mode (1/2/3): " speed_choice
+        
+        # Default to normal mode (option 1) if no input provided
+        if [ -z "$speed_choice" ]; then
+            speed_choice="1"
+            break
+        fi
+        
+        # Validate input
+        case "$speed_choice" in
+            "1"|"2"|"3")
+                break
+                ;;
+            *)
+                log_message "ERROR" "Invalid input '$speed_choice'. Please enter 1, 2, or 3, or press Enter for default."
+                ;;
+        esac
+    done
+    
     case "$speed_choice" in
         "2"|"slow"|"s")
             RATE_LIMIT_MODE="slow"
@@ -730,6 +1259,11 @@ run_interactive_mode() {
     fi
     if $DOWNLOAD_AUTO_SUBTITLES; then
         echo "  Auto-generated Subtitles: Yes (languages: $SUBTITLE_LANGUAGES)"
+    fi
+    if [ -n "$COOKIES_FROM_BROWSER" ]; then
+        echo "  Authentication: Cookies from $COOKIES_FROM_BROWSER browser"
+    elif [ -n "$COOKIES_FILE" ]; then
+        echo "  Authentication: Cookies from file ($COOKIES_FILE)"
     fi
     echo "  Content types:"
     if $DOWNLOAD_VIDEOS; then
@@ -787,6 +1321,10 @@ while [[ $# -gt 0 ]]; do
     case $1 in
         -h|--help)
             show_help
+            exit 0
+            ;;
+        --cookie-guide)
+            show_cookie_guide
             exit 0
             ;;
         -o|--output-dir)
@@ -911,6 +1449,31 @@ while [[ $# -gt 0 ]]; do
             log_message "INFO" "Rate limiting disabled (fast mode - may trigger YouTube limits)"
             shift
             ;;
+        --cookies-from-browser)
+            if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+                COOKIES_FROM_BROWSER="$2"
+                log_message "INFO" "Will extract cookies from browser: $COOKIES_FROM_BROWSER"
+                shift 2
+            else
+                log_message "ERROR" "Argument for $1 is missing."
+                exit 1
+            fi
+            ;;
+        --cookies-file)
+            if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+                # Expand tilde to home directory if used
+                COOKIES_FILE="${2/#\~/$HOME}"
+                if [ -f "$COOKIES_FILE" ]; then
+                    log_message "INFO" "Will use cookies from file: $COOKIES_FILE"
+                else
+                    log_message "WARN" "Cookies file not found: $COOKIES_FILE"
+                fi
+                shift 2
+            else
+                log_message "ERROR" "Argument for $1 is missing."
+                exit 1
+            fi
+            ;;
         -*)
             log_message "ERROR" "Unknown option $1"
             show_help
@@ -949,6 +1512,18 @@ else
     fi
     
     if [ -n "$INPUT_FILE" ]; then
+        # Expand tilde to home directory if used
+        INPUT_FILE="${INPUT_FILE/#\~/$HOME}"
+        
+        # Check if file exists
+        if [ ! -f "$INPUT_FILE" ]; then
+            log_message "ERROR" "Input file not found: $INPUT_FILE"
+            exit 1
+        fi
+        
+        # Validate file content
+        validate_input_file "$INPUT_FILE"
+        
         # Process input file
         process_input_file "$INPUT_FILE"
     else
