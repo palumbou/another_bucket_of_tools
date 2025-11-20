@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # WARNING: This script permanently deletes files from your system. 
 # Always run in dry-run mode first to review what will be deleted.

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # another_home_backup_tool.sh
 # A script to backup essential files from a user's home directory

@@ -116,10 +116,16 @@ You can edit this file manually or let the script update it when you change sett
 
 When using the wallpaper directory option (-w or WALLPAPER_DIR in env.conf), the script:
 
-1. Copies the downloaded image to the specified directory as `bing_wallpaper.jpg`
-2. Creates a `bing_wallpaper.txt` file containing just the image title
+1. Copies the downloaded image to the specified directory with the correct file extension (e.g., `bing_wallpaper.jpg`, `bing_wallpaper.png`)
+2. Creates separate text files for easy integration:
+   - `bing_title.txt` - Contains the image title (cleaned for Italian locale)
+   - `bing_copyright.txt` - Contains the copyright information (with attribution text in parentheses removed)
 
-This makes it easy to integrate with desktop environments or scripts that set the daily wallpaper.
+**Note on text processing:**
+- For Italian locale, the title is automatically cleaned of encoding issues (? character replacements)
+- Copyright text in parentheses at the end (e.g., photographer credits, agency names) is automatically removed for cleaner display
+
+This makes it easy to integrate with desktop environments or scripts that set the daily wallpaper and display image information.
 
 ## Example Use Cases
 
@@ -156,6 +162,10 @@ preload = ~/.config/hypr/wallpapers/bing_wallpaper.jpg
 wallpaper = eDP-1,~/.config/hypr/wallpapers/bing_wallpaper.jpg
 ```
 
+You can also display the image information using the separate text files:
+- `~/.config/hypr/wallpapers/bing_title.txt` - Image title
+- `~/.config/hypr/wallpapers/bing_copyright.txt` - Copyright information
+
 ### Using with Hyprlock
 
 For Hyprlock, you can simply reference the same image file directly in your `hyprlock.conf`:
@@ -164,6 +174,20 @@ For Hyprlock, you can simply reference the same image file directly in your `hyp
 background {
     # ...other configurations...
     path = ~/.config/hypr/wallpapers/bing_wallpaper.jpg
+}
+```
+
+You can also add labels to display the image information:
+
+```
+label {
+    text = cmd[update:3600000] cat ~/.config/hypr/wallpapers/bing_title.txt
+    # ...other label configurations...
+}
+
+label {
+    text = cmd[update:3600000] cat ~/.config/hypr/wallpapers/bing_copyright.txt
+    # ...other label configurations...
 }
 ```
 
@@ -179,6 +203,16 @@ The script supports 57+ different locales including:
 - And many more
 
 Use the "auto" option to automatically detect your locale based on your IP address.
+
+## Known Issues
+
+### Italian Locale Encoding Issue
+
+Currently, Bing's API has an encoding issue with Italian locale (`it-IT`) where accented characters in titles are sometimes replaced with `?` characters. The script automatically handles this issue for wallpaper files by:
+- Replacing double `??` with a single `?`
+- Removing single `?` characters
+
+This is a temporary workaround until Bing fixes the encoding issue on their end. The full metadata file still contains the original unmodified data from Bing.
 
 ## Requirements
 

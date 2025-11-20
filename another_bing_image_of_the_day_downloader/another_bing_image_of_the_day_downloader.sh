@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Script to download Bing Image of the Day
 
@@ -535,6 +535,13 @@ download_image() {
     # Extract original filename from URL
     ORIGINAL_FILENAME=$(basename "$IMAGE_RELATIVE_URL" | cut -d '?' -f 1)
     
+    # Extract file extension (look for common image extensions)
+    # Default to jpg if no valid extension is found
+    FILE_EXTENSION="jpg"
+    if [[ "$ORIGINAL_FILENAME" =~ \.(jpg|jpeg|png|webp|gif|bmp)$ ]]; then
+        FILE_EXTENSION="${BASH_REMATCH[1]}"
+    fi
+    
     # Current date for info filename prefix
     DATE=$(date +"%Y%m%d")
     
@@ -578,19 +585,37 @@ download_image() {
         
         # If second path is specified, copy the image and create a simple info file there
         if [ -n "$SECOND_PATH" ]; then
-            # Define the second path filenames
-            WALL_IMAGE_PATH="$SECOND_PATH/bing_wallpaper.jpg"
-            WALL_INFO_PATH="$SECOND_PATH/bing_wallpaper.txt"
+            # Use the file extension already extracted earlier
+            # Define the second path filenames with correct extension
+            WALL_IMAGE_PATH="$SECOND_PATH/bing_wallpaper.${FILE_EXTENSION}"
+            WALL_TITLE_PATH="$SECOND_PATH/bing_title.txt"
+            WALL_COPYRIGHT_PATH="$SECOND_PATH/bing_copyright.txt"
             
             # Copy the image to the second path
             cp "$IMAGE_PATH" "$WALL_IMAGE_PATH"
             
-            # Create a simple info file with just the title
-            echo "$IMAGE_TITLE" > "$WALL_INFO_PATH"
+            # Clean the title for Italian locale (remove ? character issues)
+            CLEAN_TITLE="$IMAGE_TITLE"
+            if [[ "$actual_locale" == it-* ]]; then
+                # Remove single ? or replace double ?? with single ?
+                CLEAN_TITLE=$(echo "$IMAGE_TITLE" | sed 's/??/?/g; s/?//g')
+            fi
+            
+            # Clean the copyright (remove text in parentheses at the end)
+            CLEAN_COPYRIGHT="$IMAGE_COPYRIGHT"
+            # Remove everything from the last opening parenthesis to the end, including the space before it
+            CLEAN_COPYRIGHT=$(echo "$IMAGE_COPYRIGHT" | sed 's/ (.*$//')
+            
+            # Save title to separate file
+            echo "$CLEAN_TITLE" > "$WALL_TITLE_PATH"
+            
+            # Save copyright to separate file
+            echo "$CLEAN_COPYRIGHT" > "$WALL_COPYRIGHT_PATH"
             
             if ! $QUIET_MODE && ! $SILENT_MODE; then
                 echo "Wallpaper copied to: $WALL_IMAGE_PATH"
-                echo "Wallpaper info saved to: $WALL_INFO_PATH"
+                echo "Wallpaper title saved to: $WALL_TITLE_PATH"
+                echo "Wallpaper copyright saved to: $WALL_COPYRIGHT_PATH"
             fi
         fi
         

@@ -116,8 +116,16 @@ Puoi modificare questo file manualmente o lasciare che lo script lo aggiorni qua
 
 Quando si utilizza l'opzione della directory per gli sfondi (-w o WALLPAPER_DIR in env.conf), lo script:
 
-1. Copia l'immagine scaricata nella directory specificata come `bing_wallpaper.jpg`
-2. Crea un file `bing_wallpaper.txt` contenente solo il titolo dell'immagine
+1. Copia l'immagine scaricata nella directory specificata con l'estensione corretta (es. `bing_wallpaper.jpg`, `bing_wallpaper.png`)
+2. Crea file di testo separati per una facile integrazione:
+   - `bing_title.txt` - Contiene il titolo dell'immagine (pulito per la località italiana)
+   - `bing_copyright.txt` - Contiene le informazioni sul copyright (con il testo di attribuzione tra parentesi rimosso)
+
+**Note sull'elaborazione del testo:**
+- Per la località italiana, il titolo viene automaticamente pulito dai problemi di codifica (sostituzioni del carattere ?)
+- Il testo del copyright tra parentesi alla fine (es. crediti del fotografo, nomi di agenzie) viene automaticamente rimosso per una visualizzazione più pulita
+
+Ciò rende facile l'integrazione con ambienti desktop o script che impostano lo sfondo quotidiano e visualizzano le informazioni dell'immagine.
 
 Questo rende facile l'integrazione con ambienti desktop o script che impostano lo sfondo giornaliero.
 
@@ -156,6 +164,10 @@ preload = ~/.config/hypr/wallpapers/bing_wallpaper.jpg
 wallpaper = eDP-1,~/.config/hypr/wallpapers/bing_wallpaper.jpg
 ```
 
+Puoi anche visualizzare le informazioni dell'immagine utilizzando i file di testo separati:
+- `~/.config/hypr/wallpapers/bing_title.txt` - Titolo dell'immagine
+- `~/.config/hypr/wallpapers/bing_copyright.txt` - Informazioni sul copyright
+
 ### Utilizzo con Hyprlock
 
 Per Hyprlock, puoi semplicemente fare riferimento allo stesso file di immagine direttamente nel tuo `hyprlock.conf`:
@@ -164,6 +176,20 @@ Per Hyprlock, puoi semplicemente fare riferimento allo stesso file di immagine d
 background {
     # ...altre configurazioni...
     path = ~/.config/hypr/wallpapers/bing_wallpaper.jpg
+}
+```
+
+Puoi anche aggiungere etichette per visualizzare le informazioni dell'immagine:
+
+```
+label {
+    text = cmd[update:3600000] cat ~/.config/hypr/wallpapers/bing_title.txt
+    # ...altre configurazioni dell'etichetta...
+}
+
+label {
+    text = cmd[update:3600000] cat ~/.config/hypr/wallpapers/bing_copyright.txt
+    # ...altre configurazioni dell'etichetta...
 }
 ```
 
@@ -179,6 +205,16 @@ Lo script supporta più di 57 diverse località, tra cui:
 - E molte altre
 
 Usa l'opzione "auto" per rilevare automaticamente la tua località in base al tuo indirizzo IP.
+
+## Problemi Noti
+
+### Problema di Codifica per la Località Italiana
+
+Attualmente, l'API di Bing presenta un problema di codifica con la località italiana (`it-IT`) dove i caratteri accentati nei titoli vengono talvolta sostituiti con caratteri `?`. Lo script gestisce automaticamente questo problema per i file wallpaper:
+- Sostituendo il doppio `??` con un singolo `?`
+- Rimuovendo i caratteri `?` singoli
+
+Questa è una soluzione temporanea finché Bing non risolve il problema di codifica dal loro lato. Il file dei metadati completo contiene comunque i dati originali non modificati provenienti da Bing.
 
 ## Requisiti
 
