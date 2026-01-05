@@ -44,6 +44,13 @@ This script offers the following capabilities:
    - Use custom cookie files for authentication
    - Access private videos, members-only content, and age-restricted videos
    - Built-in guide for cookie setup and usage
+   - Cookie export script for multiple distributions (NixOS, Debian, Fedora, Arch)
+   - Supports both standard and Flatpak browser installations
+
+6. **Error Handling**
+   - Automatic handling of YouTube rate limits (429 errors)
+   - Continues video downloads even if subtitle downloads fail
+   - Comprehensive error logging and reporting
 
 ## Requirements
 
@@ -129,10 +136,11 @@ The interactive mode provides guided assistance and shows you the equivalent non
 
 #### Download Speed Options
 
-The script offers three download speed modes to balance performance with service rate limits:
+The script offers four download speed modes to balance performance with service rate limits:
 
 - **Normal mode** (default): Balanced speed with 1-3 second delays between requests
 - **Slow mode**: More conservative with 5-10 second delays to avoid rate limits (recommended for large downloads)
+- **Very slow mode**: Maximum protection with 15-30 second delays (recommended when experiencing rate limiting)
 - **Fast mode**: No delays between requests (use with caution, may trigger service limits)
 
 #### Configuration Summary
@@ -175,13 +183,16 @@ Options:
   --only-shorts             Download only shorts
   --only-live               Download only live streams/recordings
   --slow                    Enable slower download mode (5-10 sec delay) to avoid rate limits
+  --very-slow               Enable very slow download mode (15-30 sec delay) for maximum protection
   --fast                    Disable rate limiting delays (may trigger service limits)
+  --ignore-errors           Continue downloads even if errors occur (e.g., subtitle failures)
 
 Authentication options:
   --cookies-from-browser BROWSER
                             Extract cookies from browser (chrome, firefox, edge, safari, etc.)
   --cookies-file FILE       Use cookies from a Netscape format cookie file
   --cookie-guide            Show detailed guide for cookie authentication
+  --export-cookies          Export cookies from your browser to a file (interactive)
 
 Note: Thumbnails and descriptions (with URLs) are automatically downloaded for all videos.
 ```
@@ -197,11 +208,11 @@ For each video downloaded, the script creates the following files:
 
 Example of `video_title.description.txt` content:
 ```
-Video URL: https://www.youtube.com/watch?v=XXXXX
+Video URL: https://example.com/watch?v=XXXXX
 
 Description:
 ----------------------------------------
-This is the full video description as it appears on YouTube.
+This is the full video description as it appears on the platform.
 It can contain multiple lines, links, timestamps, and other information.
 ```
 
@@ -213,39 +224,76 @@ The script supports authentication through cookies, which allows you to:
 - Bypass age restrictions
 - Download videos from channels you're subscribed to
 
+**Interactive Mode**: When running the script interactively, you'll be prompted about authentication and can choose from:
+1. Extract cookies directly from browser (uses `--cookies-from-browser`)
+2. Use an existing cookie file
+3. **Extract cookies and use them automatically** (exports to `./cookies.txt` and uses it immediately)
+4. Show detailed cookie setup guide
+
+Option 3 is the most convenient as it combines cookie export and usage in one step!
+
 #### Method 1: Extract Cookies from Browser (Recommended)
 
 The easiest method is to automatically extract cookies from your browser:
 
 ```bash
 # Extract cookies from Chrome
-./another_yt-dlp_wrapper.sh -n -u "https://youtube.com/watch?v=XXXXX" --cookies-from-browser chrome
+./another_yt-dlp_wrapper.sh -n -u "https://example.com/watch?v=XXXXX" --cookies-from-browser chrome
 
 # Extract cookies from Firefox
-./another_yt-dlp_wrapper.sh -n -u "https://youtube.com/watch?v=XXXXX" --cookies-from-browser firefox
+./another_yt-dlp_wrapper.sh -n -u "https://example.com/watch?v=XXXXX" --cookies-from-browser firefox
 ```
 
 Supported browsers: `chrome`, `chromium`, `firefox`, `edge`, `safari`, `opera`, `brave`, `vivaldi`
 
-**Requirements**: You must be logged into YouTube in the specified browser.
+**Requirements**: You must be logged into the target website in the specified browser.
 
-#### Method 2: Use a Cookie File
+#### Method 2: Export Cookies to a File
 
-Alternatively, you can export cookies to a file and use them:
+For better control and compatibility across multiple Linux distributions, use the included cookie export script:
+
+```bash
+# Export cookies interactively
+./another_yt-dlp_wrapper.sh --export-cookies
+
+# Or use the export script directly
+./another_yt-dlp_cookies_exporter.sh cookies.txt
+
+# For specific browser or profile
+BROWSER="firefox" ./another_yt-dlp_cookies_exporter.sh cookies.txt
+CHROME_PROFILE="Profile 1" ./another_yt-dlp_cookies_exporter.sh cookies.txt
+```
+
+The export script supports:
+- **Multiple distributions**: NixOS, Debian, Fedora, Arch Linux
+- **Multiple browsers**: Chrome, Chromium, Firefox
+- **Profile selection**: Export from specific browser profiles
+- **Automatic dependency management**: On NixOS, automatically starts a temporary nix-shell if dependencies are missing (no permanent installation needed)
+
+Then use the exported file:
+```bash
+./another_yt-dlp_wrapper.sh -n -u "URL" --cookies-file cookies.txt
+```
+
+For detailed instructions, see [COOKIES_EXPORTER_README.md](COOKIES_EXPORTER_README.md).
+
+#### Method 3: Manual Cookie Export (Alternative)
+
+Alternatively, you can use a browser extension to export cookies:
 
 1. Install a browser extension to export cookies:
    - **Chrome/Edge**: "Get cookies.txt LOCALLY" or "cookies.txt"
    - **Firefox**: "cookies.txt"
 
-2. Log into YouTube in your browser
+2. Log into the website in your browser
 
-3. Navigate to youtube.com and export cookies using the extension
+3. Navigate to the target website and export cookies using the extension
 
-4. Save the file (e.g., `youtube_cookies.txt`)
+4. Save the file (e.g., `cookies.txt`)
 
 5. Use the cookies file:
    ```bash
-   ./another_yt-dlp_wrapper.sh -n -u "URL" --cookies-file ~/youtube_cookies.txt
+   ./another_yt-dlp_wrapper.sh -n -u "URL" --cookies-file ~/cookies.txt
    ```
 
 **Security Note**: Keep your cookies file secure as it contains authentication data!
@@ -375,7 +423,7 @@ This information is invaluable for:
 
 ### Rate Limiting Protection
 
-The script includes comprehensive rate limiting protection to avoid potential service limits and ensure stable downloads. Three modes are available:
+The script includes comprehensive rate limiting protection to avoid potential service limits and ensure stable downloads. Four modes are available:
 
 - **Normal mode** (default): balanced protection with 1-3 second delays between requests
   - `--sleep-interval 1` (1 second delay between requests)
@@ -389,6 +437,12 @@ The script includes comprehensive rate limiting protection to avoid potential se
   - `--retry-sleep 10` (10 seconds between retry attempts)
   - `--retries 5` and `--fragment-retries 5`
 
+- **Very slow mode** (`--very-slow`): maximum protection with 15-30 second delays, recommended when experiencing rate limiting
+  - `--sleep-interval 15` (15 seconds delay between requests)
+  - `--max-sleep-interval 30` (maximum 30 seconds)
+  - `--retry-sleep 20` (20 seconds between retry attempts)
+  - `--retries 10` and `--fragment-retries 10`
+
 - **Fast mode** (`--fast`): minimal delays for faster downloads, use with caution for large operations
   - `--sleep-interval 0` (no delays between requests)
   - No retry delays (may trigger service rate limits)
@@ -398,11 +452,14 @@ Examples:
 # Use slow mode for large channel downloads to be more respectful to the service
 ./another_yt-dlp_wrapper.sh -n -u "https://example.com/c/LargeChannel" --slow
 
+# Use very slow mode when experiencing rate limiting issues
+./another_yt-dlp_wrapper.sh -n -u "https://example.com/c/LargeChannel" --very-slow
+
 # Use fast mode for single videos when you need speed
 ./another_yt-dlp_wrapper.sh -n -u "https://example.com/watch?v=XXXX" --fast
 ```
 
-**Recommendation**: use the default normal mode for most operations, switch to `--slow` for large batch downloads or if you encounter any service limitations.
+**Recommendation**: use the default normal mode for most operations, switch to `--slow` for large batch downloads, or `--very-slow` if you encounter any service limitations.
 
 ## Additional Examples
 
@@ -503,6 +560,74 @@ Then download all of them with:
 ```bash
 ./another_yt-dlp_wrapper.sh -n -f my_channels.txt -o ~/Videos --subs
 ```
+
+### Complete Example with All Features
+
+Download from a URL list with authentication, specific subtitle languages, and maximum rate limit protection:
+```bash
+# First, export cookies from Chrome
+./another_yt-dlp_cookies_exporter.sh cookies.txt
+
+# Then download with all content types, manual and auto subtitles in multiple languages, using very slow mode
+./another_yt-dlp_wrapper.sh -n \
+  -f ./list_video.txt \
+  --cookies-file ./cookies.txt \
+  --subs --auto-subs \
+  --sub-langs en,it,de \
+  --very-slow \
+  -o .
+```
+
+This example:
+- Reads URLs from `list_video.txt` in the current directory
+- Uses authentication via cookies exported from Chrome
+- Downloads all content types (videos, shorts, live streams)
+- Downloads both manual and auto-generated subtitles in English, Italian, and German
+- Uses very slow mode (15-30 sec delays) for maximum protection against rate limits
+- Saves everything to the current directory
+
+## Cookie Export Tool
+
+A dedicated script `export_cookies.sh` is included for exporting browser cookies to use with yt-dlp. This tool supports multiple browsers and Linux distributions.
+
+### Quick Start
+
+```bash
+# Export Chrome cookies
+./another_yt-dlp_wrapper.sh --export-cookies chrome cookies.txt
+
+# Export Firefox cookies
+./another_yt-dlp_wrapper.sh --export-cookies firefox cookies.txt
+
+# Use exported cookies
+./another_yt-dlp_wrapper.sh -n -u "URL" --cookies-file cookies.txt
+```
+
+### Supported Configurations
+
+- **Browsers**: Chrome, Chromium, Firefox
+- **Distributions**: NixOS, Debian, Ubuntu, Fedora, Arch Linux, and more
+- **Installations**: Standard and Flatpak versions
+
+See [COOKIES_EXPORTER_README.md](COOKIES_EXPORTER_README.md) for detailed documentation.
+
+## Known Issues
+
+### HTTP Error 429: Too Many Requests
+
+YouTube occasionally returns a "429 Too Many Requests" error when downloading subtitles. This script handles this issue automatically:
+
+1. **Automatic workaround**: The script uses `--extractor-args "youtube:player_client=android,web"` to avoid rate limiting (only when NOT using cookie authentication, as they are incompatible)
+2. **Error ignoring**: Use `--ignore-errors` flag to continue downloading videos even if subtitle downloads fail
+3. **Slow mode**: Use `--slow` flag to add delays between downloads and further reduce rate limit risk
+
+**Solution from**: [yt-dlp issue #13831](https://github.com/yt-dlp/yt-dlp/issues/13831)
+
+If you still encounter rate limiting:
+- Use the `--slow` download mode
+- Download without subtitles (don't use `--subs` or `--auto-subs`)
+- Wait some time before retrying
+- Consider using authentication with cookies
 
 ## License
 

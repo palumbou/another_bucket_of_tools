@@ -2,6 +2,9 @@
 
 # Script to manage media streams from various sites using yt-dlp
 
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Default color definitions for better output readability
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -28,6 +31,7 @@ LOG_ENABLED=false
 DOWNLOAD_VIDEOS=true
 DOWNLOAD_SHORTS=true
 DOWNLOAD_LIVE=true
+IGNORE_ERRORS=false
 
 # Authentication configuration
 USE_COOKIES=false
@@ -35,7 +39,7 @@ COOKIES_FROM_BROWSER=""
 COOKIES_FILE=""
 
 # Rate limiting configuration
-RATE_LIMIT_MODE="normal"  # normal, slow, fast
+RATE_LIMIT_MODE="normal"  # normal, slow, very-slow, fast
 SLOW_MIN_DELAY=5
 SLOW_MAX_DELAY=10
 NORMAL_MIN_DELAY=1
@@ -104,6 +108,7 @@ show_help() {
     echo "Options:"
     echo "  -h, --help                Show this help message and exit"
     echo "  --cookie-guide            Show detailed guide for cookie authentication"
+    echo "  --export-cookies          Export cookies from browser using another_yt-dlp_cookies_exporter.sh"
     echo "  -o, --output-dir DIR      Set output directory (default: current directory)"
     echo "  -u, --url URL             Media URL (video, channel, or playlist)"
     echo "  -f, --file FILE           Input file with URLs (one per line)"
@@ -123,24 +128,33 @@ show_help() {
     echo "  --only-shorts             Download only shorts"
     echo "  --only-live               Download only live streams/recordings"
     echo "  --slow                    Enable slower download mode (5-10 sec delay) to avoid rate limits"
-    echo "  --fast                    Disable rate limiting delays (may trigger YouTube limits)"
+    echo "  --very-slow               Enable very slow download mode (15-30 sec delay) for maximum protection"
+    echo "  --fast                    Disable rate limiting delays (may trigger service limits)"
     echo ""
     echo "Authentication options:"
     echo "  --cookies-from-browser BROWSER"
     echo "                            Extract cookies from browser (chrome, firefox, edge, safari, etc.)"
     echo "  --cookies-file FILE       Use cookies from a Netscape format cookie file"
+    echo "  --export-cookies [chrome|firefox] [output_file] [profile]"
+    echo "                            Export cookies to file using the export_cookies.sh script"
     echo ""
     echo "Note: Thumbnails and descriptions (with URLs) are automatically downloaded for all videos."
     echo ""
     echo "Examples:"
     echo "  ./another_yt-dlp_wrapper.sh                                  # Run in interactive mode"
-    echo "  ./another_yt-dlp_wrapper.sh -o ~/Downloads -u https://youtube.com/watch?v=XXXX  # Download a specific video"
-    echo "  ./another_yt-dlp_wrapper.sh -n -u https://youtube.com/c/ChannelName             # Download a channel non-interactively"
+    echo "  ./another_yt-dlp_wrapper.sh -o ~/Downloads -u https://example.com/watch?v=XXXX  # Download a specific video"
+    echo "  ./another_yt-dlp_wrapper.sh -n -u https://example.com/c/ChannelName             # Download a channel non-interactively"
     echo "  ./another_yt-dlp_wrapper.sh -n -f channels.txt --subs        # Download all channels with manual subtitles"
     echo "  ./another_yt-dlp_wrapper.sh -n -u URL --subs --auto-subs     # Download with both manual and auto subtitles"
     echo "  ./another_yt-dlp_wrapper.sh -n -u URL --subs --sub-langs en,it  # Download only English and Italian subtitles"
     echo "  ./another_yt-dlp_wrapper.sh -n -u URL --cookies-from-browser chrome  # Use cookies from Chrome browser"
     echo "  ./another_yt-dlp_wrapper.sh -n -u URL --cookies-file ~/cookies.txt   # Use cookies from file"
+    echo "  ./another_yt-dlp_wrapper.sh --export-cookies chrome cookies.txt  # Export cookies to file"
+    echo ""
+    echo "  # Complete example with all features:"
+    echo "  ./another_yt-dlp_cookies_exporter.sh cookies.txt             # First export cookies"
+    echo "  ./another_yt-dlp_wrapper.sh -n -f ./list_video.txt --cookies-file ./cookies.txt \\"
+    echo "    --subs --auto-subs --sub-langs en,it,de --very-slow -o .  # Then download with authentication"
     echo ""
 }
 
@@ -169,7 +183,7 @@ show_cookie_guide() {
     echo "Example:"
     echo "  ./another_yt-dlp_wrapper.sh -n -u URL --cookies-from-browser chrome"
     echo ""
-    echo "Note: You must be logged into YouTube in the specified browser."
+    echo "Note: You must be logged into the target website in the specified browser."
     echo ""
     echo "METHOD 2: Use a cookies file"
     echo "-----------------------------------------------------------"
@@ -177,16 +191,16 @@ show_cookie_guide() {
     echo "   - Chrome/Edge: 'Get cookies.txt LOCALLY' or 'cookies.txt'"
     echo "   - Firefox: 'cookies.txt'"
     echo ""
-    echo "2. Log into YouTube in your browser"
+    echo "2. Log into the target website in your browser"
     echo ""
-    echo "3. Navigate to youtube.com"
+    echo "3. Navigate to the target website"
     echo ""
     echo "4. Click the extension icon and export cookies"
-    echo "   - Save the file as 'youtube_cookies.txt' (or any name you prefer)"
+    echo "   - Save the file as 'cookies.txt' (or any name you prefer)"
     echo "   - The file must be in Netscape cookie format"
     echo ""
     echo "5. Use the cookies file with this script:"
-    echo "   ./another_yt-dlp_wrapper.sh -n -u URL --cookies-file ~/youtube_cookies.txt"
+    echo "   ./another_yt-dlp_wrapper.sh -n -u URL --cookies-file ~/cookies.txt"
     echo ""
     echo "BROWSER EXTENSION LINKS:"
     echo "-----------------------------------------------------------"
@@ -442,6 +456,14 @@ get_rate_limit_args() {
             rate_args+=(--fragment-retries 5)
             rate_args+=(--retry-sleep 10)
             ;;
+        "very-slow")
+            # Very slow mode: maximum protection against rate limits
+            rate_args+=(--sleep-interval 15)
+            rate_args+=(--max-sleep-interval 30)
+            rate_args+=(--retries 10)
+            rate_args+=(--fragment-retries 10)
+            rate_args+=(--retry-sleep 20)
+            ;;
         "normal"|*)
             # Normal mode: balanced rate limiting
             rate_args+=(--sleep-interval "$NORMAL_MIN_DELAY")
@@ -507,6 +529,9 @@ generate_command_line() {
     case "$RATE_LIMIT_MODE" in
         "slow")
             cmd="$cmd --slow"
+            ;;
+        "very-slow")
+            cmd="$cmd --very-slow"
             ;;
         "fast")
             cmd="$cmd --fast"
@@ -737,8 +762,16 @@ download_videos() {
         fi
     fi
     
-    # Rate limiting protection to avoid YouTube blocks
+    # Rate limiting protection to avoid service blocks
     yt_dlp_args+=($(get_rate_limit_args))
+    
+    # Use alternative player clients to avoid 429 errors on subtitles
+    # Only when NOT using cookies (cookies are incompatible with this workaround)
+    # See: https://github.com/yt-dlp/yt-dlp/issues/13831
+    if [ -z "$COOKIES_FROM_BROWSER" ] && [ -z "$COOKIES_FILE" ]; then
+        yt_dlp_args+=(--extractor-args "youtube:player_client=android,web")
+        log_message "INFO" "Using alternative player clients to avoid rate limiting"
+    fi
     
     log_message "INFO" "Rate limiting protection enabled (${RATE_LIMIT_MODE} mode)"
     
@@ -782,6 +815,12 @@ download_videos() {
         # Set subtitle languages
         yt_dlp_args+=(--sub-langs "$SUBTITLE_LANGUAGES")
         log_message "INFO" "Subtitle languages: $SUBTITLE_LANGUAGES"
+    fi
+    
+    # Add --ignore-errors if requested
+    if $IGNORE_ERRORS; then
+        yt_dlp_args+=(--ignore-errors)
+        log_message "INFO" "Ignoring errors during download"
     fi
     
     # Add verbosity settings
@@ -1129,10 +1168,11 @@ run_interactive_mode() {
         echo "Authentication methods:"
         echo "  1) Extract cookies from browser (recommended)"
         echo "  2) Use cookies from file"
-        echo "  3) Show cookie setup guide"
+        echo "  3) Extract cookies and use them automatically (saves to ./cookies.txt)"
+        echo "  4) Show cookie setup guide"
         
         while true; do
-            read -p "Choose method (1/2/3): " auth_method
+            read -p "Choose method (1/2/3/4): " auth_method
             
             case "$auth_method" in
                 "1")
@@ -1163,11 +1203,34 @@ run_interactive_mode() {
                     break
                     ;;
                 "3")
+                    # Extract and use cookies automatically
+                    COOKIES_FILE="$SCRIPT_DIR/cookies.txt"
+                    EXPORT_SCRIPT="$SCRIPT_DIR/another_yt-dlp_cookies_exporter.sh"
+                    
+                    if [ ! -f "$EXPORT_SCRIPT" ]; then
+                        log_message "ERROR" "Cookie export script not found: $EXPORT_SCRIPT"
+                        COOKIES_FILE=""
+                    else
+                        chmod +x "$EXPORT_SCRIPT"
+                        echo ""
+                        log_message "INFO" "Extracting cookies to $COOKIES_FILE..."
+                        "$EXPORT_SCRIPT" "$COOKIES_FILE"
+                        
+                        if [ $? -eq 0 ] && [ -f "$COOKIES_FILE" ]; then
+                            log_message "INFO" "Cookies extracted successfully. Will use: $COOKIES_FILE"
+                        else
+                            log_message "ERROR" "Failed to extract cookies. Continuing without authentication."
+                            COOKIES_FILE=""
+                        fi
+                    fi
+                    break
+                    ;;
+                "4")
                     show_cookie_guide
                     read -p "Press Enter to continue..."
                     ;;
                 *)
-                    echo "Invalid choice. Please enter 1, 2, or 3."
+                    echo "Invalid choice. Please enter 1, 2, 3, or 4."
                     ;;
             esac
         done
@@ -1205,11 +1268,12 @@ run_interactive_mode() {
     echo "Download speed options:"
     echo "  1) Normal mode (default) - Balanced speed with 1-3 sec delays"
     echo "  2) Slow mode - Slower with 5-10 sec delays to avoid rate limits"
-    echo "  3) Fast mode - No delays (may trigger YouTube rate limits)"
+    echo "  3) Very slow mode - Maximum protection with 15-30 sec delays"
+    echo "  4) Fast mode - No delays (may trigger service rate limits)"
     
     # Loop until valid input is provided
     while true; do
-        read -p "Choose download mode (1/2/3): " speed_choice
+        read -p "Choose download mode (1/2/3/4): " speed_choice
         
         # Default to normal mode (option 1) if no input provided
         if [ -z "$speed_choice" ]; then
@@ -1219,11 +1283,11 @@ run_interactive_mode() {
         
         # Validate input
         case "$speed_choice" in
-            "1"|"2"|"3")
+            "1"|"2"|"3"|"4")
                 break
                 ;;
             *)
-                log_message "ERROR" "Invalid input '$speed_choice'. Please enter 1, 2, or 3, or press Enter for default."
+                log_message "ERROR" "Invalid input '$speed_choice'. Please enter 1, 2, 3, or 4, or press Enter for default."
                 ;;
         esac
     done
@@ -1233,7 +1297,11 @@ run_interactive_mode() {
             RATE_LIMIT_MODE="slow"
             echo "Slow mode selected (5-10 sec delays)."
             ;;
-        "3"|"fast"|"f")
+        "3"|"very-slow"|"vs")
+            RATE_LIMIT_MODE="very-slow"
+            echo "Very slow mode selected (15-30 sec delays - maximum protection)."
+            ;;
+        "4"|"fast"|"f")
             RATE_LIMIT_MODE="fast"
             echo "Fast mode selected (no delays - may trigger limits)."
             ;;
@@ -1289,11 +1357,14 @@ run_interactive_mode() {
             if $DOWNLOAD_SUBTITLES; then echo -n " --subs"; fi
             if $DOWNLOAD_AUTO_SUBTITLES; then echo -n " --auto-subs"; fi
             if [ "$SUBTITLE_LANGUAGES" != "all" ] && ($DOWNLOAD_SUBTITLES || $DOWNLOAD_AUTO_SUBTITLES); then echo -n " --sub-langs \"$SUBTITLE_LANGUAGES\""; fi
+            if [ -n "$COOKIES_FROM_BROWSER" ]; then echo -n " --cookies-from-browser $COOKIES_FROM_BROWSER"; fi
+            if [ -n "$COOKIES_FILE" ]; then echo -n " --cookies-file \"$COOKIES_FILE\""; fi
             if ! $DOWNLOAD_VIDEOS; then echo -n " --no-videos"; fi
             if ! $DOWNLOAD_SHORTS; then echo -n " --no-shorts"; fi
             if ! $DOWNLOAD_LIVE; then echo -n " --no-live"; fi
             case "$RATE_LIMIT_MODE" in
                 "slow") echo -n " --slow" ;;
+                "very-slow") echo -n " --very-slow" ;;
                 "fast") echo -n " --fast" ;;
             esac
         )"
@@ -1326,6 +1397,28 @@ while [[ $# -gt 0 ]]; do
         --cookie-guide)
             show_cookie_guide
             exit 0
+            ;;
+        --export-cookies)
+            # Check if export script exists
+            EXPORT_SCRIPT="$SCRIPT_DIR/another_yt-dlp_cookies_exporter.sh"
+            if [ ! -f "$EXPORT_SCRIPT" ]; then
+                log_message "ERROR" "Cookie export script not found: $EXPORT_SCRIPT"
+                exit 1
+            fi
+            
+            # Make it executable if needed
+            chmod +x "$EXPORT_SCRIPT"
+            
+            # Check if output file is provided as next argument
+            shift
+            if [ -n "$1" ] && [ ${1:0:1} != "-" ]; then
+                # Run the export script with the provided output file
+                "$EXPORT_SCRIPT" "$1"
+            else
+                # Run the export script with default settings (interactive)
+                "$EXPORT_SCRIPT"
+            fi
+            exit $?
             ;;
         -o|--output-dir)
             if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
@@ -1381,6 +1474,10 @@ while [[ $# -gt 0 ]]; do
                 log_message "ERROR" "Argument for $1 is missing."
                 exit 1
             fi
+            ;;
+        --ignore-errors)
+            IGNORE_ERRORS=true
+            shift
             ;;
         -f|--file)
             if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
@@ -1444,9 +1541,14 @@ while [[ $# -gt 0 ]]; do
             log_message "INFO" "Rate limiting set to slow mode (${SLOW_MIN_DELAY}-${SLOW_MAX_DELAY}s delays)"
             shift
             ;;
+        --very-slow)
+            RATE_LIMIT_MODE="very-slow"
+            log_message "INFO" "Rate limiting set to very slow mode (15-30s delays - maximum protection)"
+            shift
+            ;;
         --fast)
             RATE_LIMIT_MODE="fast"
-            log_message "INFO" "Rate limiting disabled (fast mode - may trigger YouTube limits)"
+            log_message "INFO" "Rate limiting disabled (fast mode - may trigger service limits)"
             shift
             ;;
         --cookies-from-browser)
@@ -1473,6 +1575,26 @@ while [[ $# -gt 0 ]]; do
                 log_message "ERROR" "Argument for $1 is missing."
                 exit 1
             fi
+            ;;
+        --export-cookies)
+            # Call the export_cookies.sh script
+            SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+            EXPORT_SCRIPT="$SCRIPT_DIR/export_cookies.sh"
+            
+            if [ ! -f "$EXPORT_SCRIPT" ]; then
+                log_message "ERROR" "export_cookies.sh script not found in $SCRIPT_DIR"
+                exit 1
+            fi
+            
+            # Get optional arguments
+            BROWSER="${2:-chrome}"
+            OUTPUT="${3:-cookies.txt}"
+            PROFILE="${4:-Default}"
+            
+            # Execute the export script
+            log_message "INFO" "Exporting cookies from $BROWSER (profile: $PROFILE) to $OUTPUT"
+            bash "$EXPORT_SCRIPT" "$BROWSER" "$OUTPUT" "$PROFILE"
+            exit $?
             ;;
         -*)
             log_message "ERROR" "Unknown option $1"
