@@ -322,13 +322,8 @@ systemd.services.nixos-update = {
 
 ## Licenza
 
-Questo progetto è concesso in licenza sotto Creative Commons Attribution-NonCommercial 4.0 International License - vedi il file [LICENSE](../LICENSE) nella directory principale per i dettagli.
+Questo progetto è rilasciato sotto licenza Creative Commons Attribution-NonCommercial 4.0 International - vedi il file [LICENSE](../LICENSE) nella directory principale per i dettagli.
 
-## Contributi
+---
 
-Sentiti libero di aprire issue o inviare pull request su [GitHub](https://github.com/palumbou/another_bucket_of_tools).
-
-## Ringraziamenti
-
-- Costruito per la comunità [NixOS](https://nixos.org/)
-- Parte della collezione [another_bucket_of_tools](https://github.com/palumbou/another_bucket_of_tools)
+Questo script fa parte della collezione [another_bucket_of_tools](https://github.com/palumbou/another_bucket_of_tools).
