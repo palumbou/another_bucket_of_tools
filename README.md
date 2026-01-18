@@ -79,16 +79,16 @@ A comprehensive wrapper script for yt-dlp that manages media downloads from YouT
 ### 5. Another NixOS Manager
 
 A comprehensive system management tool specifically designed for NixOS with the following features:
-- System updates: Update channels and rebuild in one command
-- Safe testing: Test configurations before making them permanent
-- Major version upgrades: Safely upgrade to new NixOS releases with automatic testing and rollback
-- System cleaning: Remove old generations with customizable retention period (default: 7 days)
-- Generation management: List and rollback to previous or specific generations
-- Configuration validation: Check syntax before rebuilding
-- Multiple operation modes: Interactive, non-interactive, dry-run, and verbose
-- Custom configuration support: Use custom configuration file paths
-- Safety features: Automatic rollback on failures, generation preservation, interactive confirmations
-- Automation ready: Examples for cron and systemd timers included
+- System updates: update channels and rebuild in one command
+- Safe testing: test configurations before making them permanent
+- Major version upgrades: safely upgrade to new NixOS releases with automatic testing and rollback
+- System cleaning: remove old generations with customizable retention period (default: 7 days)
+- Generation management: list and rollback to previous or specific generations
+- Configuration validation: check syntax before rebuilding
+- Multiple operation modes: interactive, non-interactive, dry-run, and verbose
+- Custom configuration support: use custom configuration file paths
+- Safety features: automatic rollback on failures, generation preservation, interactive confirmations
+- Automation ready: examples for cron and systemd timers included
 
 **Location**: [/another_nixos_manager](./another_nixos_manager)
 

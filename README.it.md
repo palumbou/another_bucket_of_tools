@@ -79,16 +79,16 @@ Uno script wrapper completo per yt-dlp che gestisce i download di contenuti mult
 ### 5. Another NixOS Manager
 
 Uno strumento completo di gestione del sistema progettato specificamente per NixOS con le seguenti caratteristiche:
-- Aggiornamenti di sistema: Aggiorna i canali e ricostruisce con un solo comando
-- Test sicuro: Testa le configurazioni prima di renderle permanenti
-- Upgrade versioni major: Aggiorna in sicurezza alle nuove release NixOS con test automatico e rollback
-- Pulizia sistema: Rimuove le vecchie generazioni con periodo di ritenzione personalizzabile (default: 7 giorni)
-- Gestione generazioni: Elenca ed effettua rollback a generazioni precedenti o specifiche
-- Validazione configurazione: Controlla la sintassi prima della ricostruzione
-- Modalità operative multiple: Interattiva, non-interattiva, dry-run e verbose
-- Supporto configurazioni personalizzate: Usa percorsi personalizzati dei file di configurazione
-- Caratteristiche di sicurezza: Rollback automatico in caso di errori, preservazione generazioni, conferme interattive
-- Pronto per automazione: Esempi per cron e systemd timer inclusi
+- Aggiornamenti di sistema: aggiorna i canali e ricostruisce con un solo comando
+- Test sicuro: testa le configurazioni prima di renderle permanenti
+- Upgrade versioni major: aggiorna in sicurezza alle nuove release NixOS con test automatico e rollback
+- Pulizia sistema: rimuove le vecchie generazioni con periodo di ritenzione personalizzabile (default: 7 giorni)
+- Gestione generazioni: elenca ed effettua rollback a generazioni precedenti o specifiche
+- Validazione configurazione: controlla la sintassi prima della ricostruzione
+- Modalità operative multiple: interattiva, non-interattiva, dry-run e verbose
+- Supporto configurazioni personalizzate: usa percorsi personalizzati dei file di configurazione
+- Caratteristiche di sicurezza: rollback automatico in caso di errori, preservazione generazioni, conferme interattive
+- Pronto per automazione: esempi per cron e systemd timer inclusi
 
 **Posizione**: [/another_nixos_manager](./another_nixos_manager)
 
