@@ -1357,7 +1357,7 @@ run_interactive_mode() {
             if $DOWNLOAD_SUBTITLES; then echo -n " --subs"; fi
             if $DOWNLOAD_AUTO_SUBTITLES; then echo -n " --auto-subs"; fi
             if [ "$SUBTITLE_LANGUAGES" != "all" ] && ($DOWNLOAD_SUBTITLES || $DOWNLOAD_AUTO_SUBTITLES); then echo -n " --sub-langs \"$SUBTITLE_LANGUAGES\""; fi
-            if [ -n "$COOKIES_FROM_BROWSER" ]; then echo -n " --cookies-from-browser $COOKIES_FROM_BROWSER"; fi
+            if [ -n "$COOKIES_FROM_BROWSER" ]; then echo -n " --cookies-from-browser \"$COOKIES_FROM_BROWSER\""; fi
             if [ -n "$COOKIES_FILE" ]; then echo -n " --cookies-file \"$COOKIES_FILE\""; fi
             if ! $DOWNLOAD_VIDEOS; then echo -n " --no-videos"; fi
             if ! $DOWNLOAD_SHORTS; then echo -n " --no-shorts"; fi
